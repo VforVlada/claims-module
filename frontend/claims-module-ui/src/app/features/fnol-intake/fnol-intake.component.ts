@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common';
 import { AbstractControl, FormArray, FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { HttpErrorResponse } from '@angular/common/http';
 import { RouterLink } from '@angular/router';
-import { Subscription, debounceTime, distinctUntilChanged, map, of, switchMap } from 'rxjs';
+import { Subscription, catchError, debounceTime, distinctUntilChanged, map, of, switchMap } from 'rxjs';
 import { BreakpointObserver, Breakpoints } from '@angular/cdk/layout';
 import { toSignal } from '@angular/core/rxjs-interop';
 
@@ -35,8 +35,12 @@ import {
   PartyRoleLabels,
   PartyType,
   PartyTypeLabels,
+  PolicyStatus,
+  PolicyStatusLabels,
   ReserveComponentType,
   ReserveComponentTypeLabels,
+  ApprovalTierMessages,
+  ApprovalTierName,
   estimateApprovalTier,
   optionsByLabel
 } from '../../shared/models/enums';
@@ -85,6 +89,8 @@ export class FnolIntakeComponent implements OnInit {
   readonly limits = FIELD_LIMITS;
   readonly claimTypes = optionsByLabel(ClaimTypeLabels);
   readonly claimTypeLabels = ClaimTypeLabels;
+  readonly PolicyStatus = PolicyStatus;
+  readonly policyStatusLabels = PolicyStatusLabels;
   readonly partyTypes = optionsByLabel(PartyTypeLabels);
   readonly partyTypeLabels = PartyTypeLabels;
   readonly partyRoles = optionsByLabel(PartyRoleLabels);
@@ -93,6 +99,7 @@ export class FnolIntakeComponent implements OnInit {
   readonly assetTypeLabels = AssetTypeLabels;
   readonly reserveComponentTypes = optionsByLabel(ReserveComponentTypeLabels);
   readonly reserveComponentTypeLabels = ReserveComponentTypeLabels;
+  readonly approvalTierMessages = ApprovalTierMessages;
   readonly PartyRole = PartyRole;
 
   readonly causeOfLossCodes = signal<CauseOfLossCodeDto[]>([]);
@@ -217,12 +224,22 @@ export class FnolIntakeComponent implements OnInit {
     });
 
     // Policy typeahead: one search request once typing pauses for 300 ms, and only for 2+ characters.
+    // A failed search is swallowed inside switchMap (the error interceptor has already shown the
+    // snackbar) so the stream survives and the next keystroke searches again. It reports no term,
+    // so a failure isn't mistaken for "no matching policies".
     policySearch.valueChanges
       .pipe(
         map((value: string | PolicySearchResultDto | null) => (typeof value === 'string' ? value : '')),
         debounceTime(300),
         distinctUntilChanged(),
-        switchMap((term) => (term.length >= 2 ? this.policiesService.search(term).pipe(map((results) => ({ term, results }))) : of({ term, results: [] })))
+        switchMap((term) =>
+          term.length >= 2
+            ? this.policiesService.search(term).pipe(
+                map((results) => ({ term, results })),
+                catchError(() => of({ term: '', results: [] as PolicySearchResultDto[] }))
+              )
+            : of({ term, results: [] })
+        )
       )
       .subscribe(({ term, results }) => {
         this.policyResults.set(results);
@@ -246,7 +263,7 @@ export class FnolIntakeComponent implements OnInit {
     return this.parties.controls.some((c) => c.get('partyRole')?.value === PartyRole.Claimant);
   }
 
-  get estimatedTier(): string {
+  get estimatedTier(): ApprovalTierName | '' {
     const amount = this.step3Form.get('amount')?.value;
     if (!amount) return '';
     return estimateApprovalTier(Math.abs(amount));
@@ -269,8 +286,8 @@ export class FnolIntakeComponent implements OnInit {
     this.policyCoverages.set([]);
     this.coverageRequest?.unsubscribe();
     if (policy) {
-      this.coverageRequest = this.policiesService.getCoverage(policy.id).subscribe((coverages) => {
-        if (this.selectedPolicy()?.id === policy.id) this.policyCoverages.set(coverages);
+      this.coverageRequest = this.policiesService.getCoverage(policy.policyId).subscribe((coverages) => {
+        if (this.selectedPolicy()?.policyId === policy.policyId) this.policyCoverages.set(coverages);
       });
     }
   }
@@ -326,7 +343,7 @@ export class FnolIntakeComponent implements OnInit {
     const step1 = this.step1Form.value;
 
     const request: CreateClaimRequest = {
-      policyId: step1.unknownPolicy ? null : (this.selectedPolicy()?.id ?? null),
+      policyId: step1.unknownPolicy ? null : (this.selectedPolicy()?.policyId ?? null),
       claimType: step1.claimType,
       lossDate: (step1.lossDate as Date).toISOString(),
       lossDescription: step1.lossDescription,

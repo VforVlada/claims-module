@@ -1,6 +1,6 @@
 import { signal } from '@angular/core';
 import { ClaimDetailDto } from '../shared/models/claim.models';
-import { ApprovalStatus, ApprovalTier, ClaimStatus, ClaimType, PostingStatus, ReserveComponentType } from '../shared/models/enums';
+import { ApprovalStatus, ApprovalTier, ClaimStatus, ClaimType, PostingStatus, ReserveComponentStatus, ReserveComponentType } from '../shared/models/enums';
 import { ReserveComponentDto, ReserveHistoryDto } from '../shared/models/reserve.models';
 import { PagedList } from '../shared/models/common.models';
 import { CurrentUser } from '../core/services/auth.service';
@@ -56,6 +56,9 @@ export function reserveComponent(id: string, history: ReserveHistoryDto[]): Rese
     componentType: ReserveComponentType.IndemnityReserve,
     currentAmount: history[history.length - 1]?.newAmount ?? 0,
     currency: 'USD',
+    status: ReserveComponentStatus.Open,
+    // Mirrors the API: the latest change's approval status (history is oldest-first here).
+    approvalStatus: history[history.length - 1]?.approvalStatus ?? ApprovalStatus.AutoApproved,
     history
   };
 }

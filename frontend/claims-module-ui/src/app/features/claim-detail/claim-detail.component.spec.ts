@@ -23,7 +23,7 @@ import { StatusBadgeHarness } from '../../shared/components/status-badge/testing
 import { SlaBadgeHarness } from '../../shared/components/sla-badge/testing/sla-badge.harness';
 import { ClaimDetailDto, ClaimDocumentDto } from '../../shared/models/claim.models';
 import { ClaimStatusDto } from '../../shared/models/reference-data.models';
-import { ApprovalStatus, ApprovalTier, ClaimStatus, DocumentType, ReserveComponentType } from '../../shared/models/enums';
+import { ApprovalStatus, ApprovalTier, ApprovalTierMessages, ApprovalTierName, ClaimStatus, DocumentType, ReserveComponentType } from '../../shared/models/enums';
 import { API, authStub, claimDetail, emptyPage, historyEntry, reserveComponent } from '../../testing/fixtures';
 
 type Role = 'Handler' | 'Supervisor' | 'Manager';
@@ -133,6 +133,18 @@ describe('ClaimDetailComponent', () => {
       fixture.detectChanges();
       expect(await loader.getAllHarnesses(MatProgressSpinnerHarness)).toEqual([]);
       expect(fixture.nativeElement.textContent).toContain('GL_POSTING_SIMULATED');
+    });
+
+    it('describes each entry from both sides: old → new, or whichever side it has', () => {
+      create('Handler');
+      flushLoad(claimDetail());
+      const describe = (oldValues: string | null, newValues: string | null) =>
+        fixture.componentInstance.auditDescription({ id: 'a', action: 'X', oldValues, newValues, performedBy: 'u', createdAt: '' });
+
+      expect(describe('Draft', 'Open')).toBe('Draft → Open');
+      expect(describe('Not justified', null)).withContext('a rejection keeps its reason in oldValues').toBe('Not justified');
+      expect(describe(null, 'DR … / CR …')).toBe('DR … / CR …');
+      expect(describe(null, null)).toBe('—');
     });
   });
 
@@ -251,8 +263,8 @@ describe('ClaimDetailComponent', () => {
       ['10000', 'Auto'],
       ['10000.01', 'Supervisor'],
       ['100000.01', 'Manager']
-    ]) {
-      it(`${amount} -> requires ${tier} approval`, async () => {
+    ] as [string, ApprovalTierName][]) {
+      it(`${amount} -> ${ApprovalTierMessages[tier]}`, async () => {
         create('Handler');
         flushLoad(claimDetail());
         await openTab('Reserves');
@@ -260,7 +272,7 @@ describe('ClaimDetailComponent', () => {
 
         const amountField = await loader.getHarness(MatFormFieldHarness.with({ floatingLabelText: 'Amount' }));
         await ((await amountField.getControl(MatInputHarness)) as MatInputHarness).setValue(amount);
-        expect(fixture.nativeElement.textContent).toContain(`Requires ${tier} approval`);
+        expect(fixture.nativeElement.textContent).toContain(ApprovalTierMessages[tier]);
       });
     }
 

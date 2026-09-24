@@ -67,10 +67,10 @@ describe('LoginComponent', () => {
     expect(navigate).toHaveBeenCalledWith(['/claims']);
   });
 
-  it('reports an unreachable API', () => {
+  it('leaves an unreachable API to the error interceptor and shows the empty state', () => {
     http.expectOne(`${API}/auth/users`).flush(null, { status: 0, statusText: 'Unknown Error' });
     fixture.detectChanges();
-    expect(snackbar.error).toHaveBeenCalledWith('Could not reach the Claims Module API. Is it running?');
+    expect(snackbar.error).withContext('the interceptor reports it; a second snackbar would replace its message').not.toHaveBeenCalled();
     expect(fixture.nativeElement.textContent).toContain('No mock roles available');
   });
 });

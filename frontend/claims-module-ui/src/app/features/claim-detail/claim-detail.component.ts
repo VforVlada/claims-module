@@ -45,9 +45,12 @@ import {
   PartyRoleLabels,
   PartyType,
   PartyTypeLabels,
+  ReserveComponentStatus,
   ReserveComponentType,
   ReserveComponentTypeLabels,
   canApproveTier,
+  ApprovalTierMessages,
+  ApprovalTierName,
   estimateApprovalTier,
   optionsByLabel,
   sortByLabel
@@ -97,11 +100,13 @@ export class ClaimDetailComponent implements OnInit {
   readonly partyTypeLabels = PartyTypeLabels;
   readonly partyRoleLabels = PartyRoleLabels;
   readonly reserveComponentTypeLabels = ReserveComponentTypeLabels;
+  readonly approvalTierMessages = ApprovalTierMessages;
   readonly reserveComponentTypes = optionsByLabel(ReserveComponentTypeLabels);
   readonly partyTypes = optionsByLabel(PartyTypeLabels);
   readonly partyRoles = optionsByLabel(PartyRoleLabels);
   readonly ApprovalStatus = ApprovalStatus;
   readonly ApprovalTier = ApprovalTier;
+  readonly ReserveComponentStatus = ReserveComponentStatus;
   readonly recoveryReserve = ReserveComponentType.RecoveryReserve;
   readonly documentTypeLabels = DocumentTypeLabels;
   readonly documentTypes = optionsByLabel(DocumentTypeLabels);
@@ -310,7 +315,7 @@ export class ClaimDetailComponent implements OnInit {
   }
 
   /** Authority tier is evaluated on the amount being submitted — for an adjust, the new total. */
-  get reserveTierPreview(): string {
+  get reserveTierPreview(): ApprovalTierName | '' {
     const amount = this.reserveForm.get('amount')?.value;
     if (!amount) return '';
     return estimateApprovalTier(Math.abs(amount));
@@ -426,6 +431,15 @@ export class ClaimDetailComponent implements OnInit {
   }
 
   /** Four-eyes rule (the API answers 403): nobody approves a change they requested themselves. Rejecting it is allowed. */
+  /**
+   * The audit row's description. Entries record a change as old → new (e.g. a status change);
+   * some carry only one side, e.g. a rejection's reason in oldValues or a GL journal in newValues.
+   */
+  auditDescription(entry: ClaimAuditLogDto): string {
+    if (entry.oldValues && entry.newValues) return `${entry.oldValues} → ${entry.newValues}`;
+    return entry.newValues || entry.oldValues || '—';
+  }
+
   isOwnRequest(history: ReserveHistoryDto): boolean {
     const me = this.auth.currentUser()?.userName;
     return !!me && history.requestedBy.localeCompare(me, undefined, { sensitivity: 'accent' }) === 0;

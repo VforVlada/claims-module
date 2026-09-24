@@ -802,6 +802,57 @@ BEGIN
     VALUES (N'20260923111544_ReserveHistoryAmountsSlaFlagAndDocumentType', N'9.0.20');
 END;
 
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260924204654_AddReserveComponentStatusAndApprovalStatus'
+)
+BEGIN
+    ALTER TABLE [ClaimReserveComponents] ADD [ApprovalStatus] nvarchar(50) NOT NULL DEFAULT N'AutoApproved';
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260924204654_AddReserveComponentStatusAndApprovalStatus'
+)
+BEGIN
+    ALTER TABLE [ClaimReserveComponents] ADD [Status] nvarchar(50) NOT NULL DEFAULT N'Open';
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260924204654_AddReserveComponentStatusAndApprovalStatus'
+)
+BEGIN
+    UPDATE rc SET rc.ApprovalStatus = latest.ApprovalStatus
+    FROM ClaimReserveComponents rc
+    CROSS APPLY (
+        SELECT TOP (1) h.ApprovalStatus
+        FROM ReserveHistories h
+        WHERE h.ReserveComponentId = rc.Id
+        ORDER BY h.ChangeSequence DESC
+    ) latest;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260924204654_AddReserveComponentStatusAndApprovalStatus'
+)
+BEGIN
+    UPDATE rc SET rc.Status = 'Closed'
+    FROM ClaimReserveComponents rc
+    JOIN Claims c ON c.Id = rc.ClaimId
+    WHERE c.Status IN ('Closed', 'Withdrawn');
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260924204654_AddReserveComponentStatusAndApprovalStatus'
+)
+BEGIN
+    INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
+    VALUES (N'20260924204654_AddReserveComponentStatusAndApprovalStatus', N'9.0.20');
+END;
+
 COMMIT;
 GO
 

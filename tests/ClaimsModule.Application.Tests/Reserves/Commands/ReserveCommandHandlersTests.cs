@@ -133,6 +133,7 @@ public class OpenReserveCommandHandlerTests
         using var context = TestDbContext.Create();
         var claim = SeedClaim(context);
         claim.AddParty(PartyType.Individual, PartyRole.Claimant, "John Doe", null, null, "tester");
+        claim.TransitionTo(ClaimStatus.Open, "tester");
         claim.TransitionTo(ClaimStatus.Closed, "tester");
         await context.SaveChangesAsync(CancellationToken.None);
         var sut = CreateHandler(context);

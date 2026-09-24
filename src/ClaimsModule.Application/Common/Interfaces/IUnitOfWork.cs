@@ -13,4 +13,10 @@ public interface IUnitOfWork
     Task CommitTransactionAsync(CancellationToken cancellationToken);
 
     Task RollbackTransactionAsync(CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Defers a side effect outside the database (e.g. enqueueing a Hangfire job) until the open
+    /// transaction commits, and drops it on rollback. Runs it immediately when no transaction is open.
+    /// </summary>
+    void OnCommitted(Action action);
 }

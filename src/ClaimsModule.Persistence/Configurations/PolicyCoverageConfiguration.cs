@@ -28,7 +28,7 @@ public sealed class PolicyCoverageConfiguration : IEntityTypeConfiguration<Polic
         });
 
         // EF Core does not support HasData() on entities with complex properties
-        // (see dotnet/efcore#31254) — PolicyCoverage rows are seeded via a raw SQL
-        // script in the InitialCreate migration instead (see PolicySeed.Coverages).
+        // (see dotnet/efcore#31254) — PolicyCoverage rows are seeded by a hand-written
+        // migrationBuilder.InsertData step in the InitialCreate migration instead (see PolicySeed.Coverages).
     }
 }

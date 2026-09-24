@@ -83,6 +83,7 @@ public class ClaimTests
     {
         var claim = CreateClaim();
         claim.AddParty(PartyType.Individual, PartyRole.Claimant, "John Doe", null, null, "tester");
+        claim.TransitionTo(ClaimStatus.Open, "tester");
         claim.TransitionTo(status, "tester");
 
         Assert.Throws<InvalidReserveOperationException>(() => claim.OpenReserve(ReserveComponentType.IndemnityReserve, new Money(5000m), ApprovalTier.Auto, "tester"));
@@ -146,5 +147,55 @@ public class ClaimTests
         claim.FlagManagerOverrideRequired();
 
         Assert.True(claim.RequiresManagerOverride);
+    }
+
+    /// <summary>BR-C-06 as a domain invariant: Draft → Closed is refused even if the workflow table were to allow it.</summary>
+    [Fact]
+    public void TransitionTo_DraftToClosed_ThrowsClaimInvariantViolationException()
+    {
+        var claim = CreateClaim();
+        claim.AddParty(PartyType.Individual, PartyRole.Claimant, "John Doe", null, null, "tester");
+
+        Assert.Throws<ClaimInvariantViolationException>(() => claim.TransitionTo(ClaimStatus.Closed, "tester"));
+        Assert.Equal(ClaimStatus.Draft, claim.Status);
+    }
+
+    /// <summary>Reserve lines follow the claim: closing or withdrawing it closes them, and a closed line refuses changes and approvals.</summary>
+    [Theory]
+    [InlineData(ClaimStatus.Closed)]
+    [InlineData(ClaimStatus.Withdrawn)]
+    public void TransitionTo_ClosedOrWithdrawn_ClosesReservesAndBlocksChangesAndApprovals(ClaimStatus terminal)
+    {
+        var claim = CreateClaim();
+        claim.AddParty(PartyType.Individual, PartyRole.Claimant, "John Doe", null, null, "tester");
+        claim.TransitionTo(ClaimStatus.Open, "tester");
+        var component = claim.OpenReserve(ReserveComponentType.IndemnityReserve, new Money(50000m), ApprovalTier.Supervisor, "tester");
+        var pending = component.History.Single();
+
+        claim.TransitionTo(terminal, "tester");
+
+        Assert.Equal(ReserveComponentStatus.Closed, component.Status);
+        Assert.Throws<InvalidReserveOperationException>(() => component.SubmitChange(new Money(1000m), ApprovalTier.Auto, "tester"));
+        Assert.Throws<InvalidReserveOperationException>(() => component.Approve(pending.Id, "supervisor", DateTimeOffset.UtcNow));
+
+        // Rejecting a change left pending at closure is still allowed: it just withdraws it.
+        component.Reject(pending.Id, "supervisor", "Claim closed", DateTimeOffset.UtcNow);
+        Assert.Equal(ApprovalStatus.Rejected, component.ApprovalStatus);
+    }
+
+    [Fact]
+    public void TransitionTo_Reopened_ReopensReserves()
+    {
+        var claim = CreateClaim();
+        claim.AddParty(PartyType.Individual, PartyRole.Claimant, "John Doe", null, null, "tester");
+        claim.TransitionTo(ClaimStatus.Open, "tester");
+        var component = claim.OpenReserve(ReserveComponentType.IndemnityReserve, new Money(5000m), ApprovalTier.Auto, "tester");
+        claim.TransitionTo(ClaimStatus.Closed, "tester");
+
+        claim.TransitionTo(ClaimStatus.Reopened, "tester");
+
+        Assert.Equal(ReserveComponentStatus.Open, component.Status);
+        component.SubmitChange(new Money(6000m), ApprovalTier.Auto, "tester");
+        Assert.Equal(6000m, component.CurrentAmount.Amount);
     }
 }

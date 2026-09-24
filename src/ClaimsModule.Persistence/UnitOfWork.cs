@@ -6,6 +6,7 @@ namespace ClaimsModule.Persistence;
 public sealed class UnitOfWork(ClaimsDbContext context) : IUnitOfWork, IAsyncDisposable, IDisposable
 {
     private IDbContextTransaction? _transaction;
+    private readonly List<Action> _afterCommit = [];
 
     public async Task BeginTransactionAsync(CancellationToken cancellationToken)
     {
@@ -22,10 +23,19 @@ public sealed class UnitOfWork(ClaimsDbContext context) : IUnitOfWork, IAsyncDis
         await _transaction.CommitAsync(cancellationToken);
         await _transaction.DisposeAsync();
         _transaction = null;
+
+        var actions = _afterCommit.ToList();
+        _afterCommit.Clear();
+        foreach (var action in actions)
+        {
+            action();
+        }
     }
 
     public async Task RollbackTransactionAsync(CancellationToken cancellationToken)
     {
+        _afterCommit.Clear();
+
         if (_transaction is null)
         {
             return;
@@ -34,6 +44,17 @@ public sealed class UnitOfWork(ClaimsDbContext context) : IUnitOfWork, IAsyncDis
         await _transaction.RollbackAsync(cancellationToken);
         await _transaction.DisposeAsync();
         _transaction = null;
+    }
+
+    public void OnCommitted(Action action)
+    {
+        if (_transaction is null)
+        {
+            action();
+            return;
+        }
+
+        _afterCommit.Add(action);
     }
 
     public async ValueTask DisposeAsync()

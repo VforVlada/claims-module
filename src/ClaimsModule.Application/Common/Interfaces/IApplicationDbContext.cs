@@ -30,6 +30,9 @@ public interface IApplicationDbContext
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken);
 
+    /// <summary>Stops tracking everything, discarding unsaved changes — e.g. after a failed save.</summary>
+    void DiscardChanges();
+
     /// <summary>Tracked entities that currently hold unpublished domain events.</summary>
     IReadOnlyCollection<IHasDomainEvents> GetEntitiesWithDomainEvents();
 }

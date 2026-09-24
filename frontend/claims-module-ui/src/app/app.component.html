@@ -20,6 +20,13 @@
   </mat-toolbar>
 }
 
+<!-- One app-wide indicator for every API call in flight (loadingInterceptor); reserved height, so nothing shifts. -->
+<div class="global-loading">
+  @if (loading.isLoading()) {
+    <mat-progress-bar mode="indeterminate" aria-label="Loading"></mat-progress-bar>
+  }
+</div>
+
 <main class="app-content">
   <router-outlet></router-outlet>
 </main>

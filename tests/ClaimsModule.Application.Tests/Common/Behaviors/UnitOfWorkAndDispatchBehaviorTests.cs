@@ -62,7 +62,7 @@ public class DomainEventDispatchBehaviorTests
         public void Raise() => AddDomainEvent(new TestEvent());
     }
 
-    /// <summary>Events publish only after the inner pipeline (and so the commit) has completed, and are cleared so they can't publish twice.</summary>
+    /// <summary>Events publish only after the handler has run (and saved), and are cleared so they can't publish twice.</summary>
     [Fact]
     public async Task Handle_CommandSucceeds_PublishesEventsAfterNextAndClearsThem()
     {
@@ -85,6 +85,18 @@ public class DomainEventDispatchBehaviorTests
 
         Assert.Equal(["next", "publish"], order);
         Assert.Empty(aggregate.DomainEvents);
+    }
+
+    /// <summary>ARCH-05: dispatch is registered inside the unit of work, so event handlers' writes share the command's transaction.</summary>
+    [Fact]
+    public void Pipeline_DispatchesEventsInsideTheUnitOfWork()
+    {
+        var behaviors = new Microsoft.Extensions.DependencyInjection.ServiceCollection().AddApplication()
+            .Where(d => d.ServiceType == typeof(IPipelineBehavior<,>))
+            .Select(d => d.ImplementationType)
+            .ToList();
+
+        Assert.True(behaviors.IndexOf(typeof(UnitOfWorkBehavior<,>)) < behaviors.IndexOf(typeof(DomainEventDispatchBehavior<,>)));
     }
 
     /// <summary>JOB-04: when the inner pipeline throws (rolled-back transaction), nothing is published — so no GL job can be enqueued.</summary>

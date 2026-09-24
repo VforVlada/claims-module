@@ -4,12 +4,33 @@ This project was built with [Claude Code](https://claude.com/claude-code) (Claud
 
 ## Tools
 
+Summary: **Claude Code was the only AI tool used.** No Cursor, Copilot, ChatGPT or other assistant was involved. The work ran across 9 Claude Code sessions from 21–24 September 2026; the final review session used the Claude Opus 5.5 model. Everything else below is verification tooling or Claude Code's own features, not a second AI.
+
 - **Claude Code**, working directly against the repo: reading/writing files, running `dotnet build`/`dotnet test`/`dotnet ef`, starting and driving the API and Angular dev servers, issuing live HTTP requests (`curl`) against the running API, and driving the actual browser (via a Chrome automation extension) to exercise the Angular UI end-to-end.
 - **Docker + Testcontainers, Playwright, NetArchTest**: the verification tooling. Every claim of "working" in the later sessions is backed by a real run: integration tests against a real SQL Server 2022 and Azurite container, E2E against a running stack in Chrome, and architecture rules checked against the compiled assemblies.
 - **A persistent memory system** (plain files under a project-scoped memory directory, indexed by a `MEMORY.md`), used to carry project-specific facts — architecture decisions, known gaps, workflow preferences — across sessions that don't share conversation context. This mattered concretely: a later session found the written implementation plan not by being told where it was, but by searching the filesystem once memory pointed at "check outside the repo," then wrote back *where* it had found it so the next session wouldn't repeat the search.
 - **Subagent delegation.** Early on, once: a research-only agent was sent to read every DI-registration extension method, JWT/Hangfire/Storage config class, and the API project's `.csproj` across four projects, and report back exact method signatures and required config keys — so that `Program.cs` could be wired up correctly in one pass instead of iterative trial and error against build errors. Later, while implementing the testing plan and the requirements review, the frontend work (Karma specs with Material harnesses, the ESLint UI-02 rule, the Playwright suite, and the UI side of contract changes) was delegated to a parallel agent with an explicit written API contract, while the main session worked on the backend. The main session then ran that agent's output itself rather than trusting its report, which is how the E2E selector bug below was caught.
 
 ## Workflow structure
+
+### Context loading strategy
+
+- **Source documents first, from disk.** The assessment brief, the FRS/DDL spec and the testing plan (`.docx` files in the candidate's Downloads folder) were read directly by the agent. They were not summarized into prompts, so every audit quoted the real requirement text. Where the two specs disagreed, the brief won; the reconciliation is `ARCHITECTURE.md` §0.
+- **Ground truth before changes.** Each session began with `git log` / `git status` and the actual source of the layer being touched, not a remembered summary.
+- **Persistent memory for what the repo can't say.** This covers where the spec files live, machine gotchas (Docker must be started; Chrome instead of Playwright's Chromium; tests must run serially because of Hangfire) and open decisions awaiting the candidate. Code facts were deliberately *not* stored, because the code is the source for those.
+- **Delegated reading for breadth.** When one answer needed many files (DI wiring across four projects), a research subagent read them and reported signatures, keeping the main context small.
+
+### Prompt sequencing
+
+The candidate's prompts followed a repeating **audit → decide → fix → verify** cycle:
+1. **Audit.** A requirement list, or a document path, with "check if everything is correct". The agent answers with a gap table and cites files and lines, without changing code yet.
+2. **Decide.** A short reply ("yes", "fix all the sections", "fix issues") approves the proposed scope. Open product questions are raised explicitly. When they went unanswered, the recommended option was applied and flagged (see prompt 9).
+3. **Fix.** Highest-risk items first: correctness defects before tests, tests before docs. Frontend work was sometimes run in a parallel agent with a written API contract.
+4. **Verify.** The result is re-run, never just re-read (next section), and the answer reports what was *not* done.
+
+The final review session used the brief's own checklist items as prompts, one topic at a time (prompts 10–14).
+
+### Iteration approach
 
 Work proceeded layer by layer over several sessions (visible in the commit history: Domain → Application → Persistence → Infrastructure → API → bug fixes → tests → frontend → docs), each session picking up where the last left off. Because sessions don't automatically share context, each one re-established ground truth before making changes, rather than trusting a summary: reading `git log` and `git status` to see what actually exists, reading the actual source of the layer being extended, and — critically — running the code, not just reading it.
 
@@ -28,6 +49,12 @@ These are the actual user prompts (verbatim) from this project, in order, with w
 7. **"fix all the sections"** — the follow-up that turned the audit into implementation. It was structured as backend first (defects, then tests layer by layer in the plan's own priority order), with frontend tests and E2E handed to a parallel agent, then CI, smoke tests and docs.
 8. **"make docker run"** and **"fix issues"** — short operational prompts. Both led to real defects being found by *running* things: the Docker stack's persisted data exposed the claim-number format break; "fix issues" was scoped to the open items in the previous answer rather than invented work.
 9. **"check C:\\…\\DICEUS_Fullstack_Technical_Assessment (1).docx check if exverything is correctly to the requirements and what else has to be done"** — a requirements audit of the whole deliverable against this brief. It was answered with a mismatch table and one explicit design question (reserve adjust semantics). The user replied with the proposed order of work without choosing an option, so the recommended option was applied and flagged as such.
+
+10. **A pasted checklist of eight architecture questions** ("Does the CQRS implementation correctly separate reads from writes via MediatR? … Is the Hangfire idempotency key strategy correctly implemented? … Is Azure Blob Storage wrapped behind an interface for testability?"). *Purpose:* a design review before submission. It was answered per question with a verdict and evidence. The candidate then replied **"yes"** to the proposed fixes, which led to domain-event atomicity, a narrower Hangfire exception filter, and soft delete on `Remove()`.
+11. **"HTTP error handling: all API errors must be caught and displayed as user-friendly snackbar notifications"** — one requirement, stated as a rule. *Purpose:* verify that the requirement holds everywhere, not just in the interceptor. It led to three frontend/API fixes (see below).
+12. **"Make sure your backend startup project references Microsoft.EntityFrameworkCore.Design"** — a checklist item. *Purpose:* confirmation. The answer was "already true", verified by running `dotnet ef` through the startup project rather than by reading the `.csproj`.
+13. **The README and ARCHITECTURE.md requirement lists**, pasted as-is. *Purpose:* make each document match the brief's required contents. Both were rewritten section by section, and every factual statement was re-checked against code, migrations, Bicep and CI.
+14. **This document's requirement list.** The same approach.
 
 ## Where AI helped most
 
@@ -74,6 +101,14 @@ Clicking through the app as a handler surfaced problems that the passing test su
 4. **An unbounded input reached the database.** A reserve of `1e20` overflowed `DECIMAL(19,4)` and returned a generic 500. There is now a validated maximum on both sides, plus length limits on every text field to match its column.
 5. **A requirements re-check found a missed requirement.** The brief says `GET /api/policies/{id}/coverage` is "used during FNOL to display available coverage types". The endpoint and its service method existed, but no screen called them. FNOL now shows the picked policy's coverages.
 
+### Final review session: the AI's own earlier design, found wanting
+
+1. **Audit entries could be lost, by an earlier AI design choice.** Domain events had been dispatched *after* commit, so that a GL job would never see uncommitted rows. But their audit writes then ran outside any transaction. A failed audit insert left a committed claim with no `CLAIM_CREATED` entry and returned a 500, and a client retry would create a duplicate claim. Tests passed because nothing forced the audit write to fail. The fix dispatches events *inside* the transaction and defers only the Hangfire enqueue to commit (`IUnitOfWork.OnCommitted`). A new integration test injects a failing audit service and asserts that the claim is rolled back.
+2. **The idempotency guard swallowed real failures.** `PostGlReserveChangeJob` treated *any* `DbUpdateException` as "a duplicate already posted". A timeout or deadlock therefore ended the job as a success, with no retry, and the posting stayed `Pending` for good. It also marked the posting `Failed` on every attempt, contradicting its own documentation ("on exhaustion"). The fix: on a failed save, re-read whether the key is already posted, rethrow anything else, and mark `Failed` only on the last retry. A test simulates the transient failure.
+3. **The AI's own audit contained a wrong finding, and it was withdrawn.** The review flagged `AzureBlobStorageService.CheckHealthAsync` for ignoring whether the container exists. While fixing it, the AI noticed that the container is created on first upload, so "fixing" it would fail every health check on a fresh deployment. The finding was withdrawn, and the candidate was told why, rather than applying it.
+4. **A frontend stream died on the first error.** The FNOL policy typeahead ran each search inside `switchMap` without a `catchError`. One failed search ended the stream, and the search box silently stopped working until the page was reloaded. The interceptor still showed a snackbar, so the failure looked handled. It was found by tracing every `subscribe` without an error path, not by a test, and fixed with a regression spec.
+5. **Earlier AI-written docs had drifted from the code.** Examples: the README said three seeded policies (there are four) and omitted `dotnet-ef` from the prerequisites. `ARCHITECTURE.md` said self-approval wasn't implemented in §0 while §5 described it. While writing the new decisions table, the AI also caught two claims in its *own draft* that it had not verified ("every command handler has a test asserting its write"), and replaced them before finishing.
+
 ## AI-generated vs. directed and refined
 
 - **Written by the AI (Claude Code):** effectively all code, tests, migrations, infrastructure (Bicep, CI) and first drafts of every document in this repository.
@@ -87,8 +122,12 @@ Clicking through the app as a handler surfaced problems that the passing test su
 
 ## AI interaction history (§4.6)
 
-> **Candidate — add the link here.** Use a shared or exported Claude conversation, or equivalent. The Claude Code sessions for this project are stored locally; export them or share them from claude.ai before submitting.
+> **Candidate — add the link here.** Use a shared or exported Claude conversation, or equivalent.
+
+Where the history is: the 9 Claude Code sessions for this project (21–24 September 2026) are stored locally as JSON Lines transcripts, one file per session, under `~/.claude/projects/C--ClaimsModule/*.jsonl`. Ways to provide it:
+- **Export from Claude Code:** reopen a session (`claude --resume`) and run `/export` to write it as a readable text file. Commit the files under e.g. `docs/ai-history/`, or attach them.
+- **Share the raw transcripts:** the `.jsonl` files are complete but large (≈ 40 MB in total). Review them before sharing: they contain file contents and command output from this machine.
 
 ## What this means for reviewing this codebase
 
-Treat a clean `dotnet build`/`ng build` and passing unit tests as necessary, not sufficient. Both real production bugs in this codebase were invisible to both and only surfaced under an actual live, multi-step scenario. If extending this module, the same discipline applies: run it, don't just compile it.
+Treat a clean `dotnet build`/`ng build` and passing unit tests as necessary, not sufficient. Most of the defects above passed both. They surfaced only under a live multi-step scenario, against real SQL Server, against persisted data, or when a failure was deliberately injected. If extending this module, the same discipline applies: run it, don't just compile it.

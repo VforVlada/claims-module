@@ -130,6 +130,8 @@ public sealed class GlPostingJobTests(ApiWebApplicationFactory factory) : Integr
         }
 
         public Task RollbackTransactionAsync(CancellationToken cancellationToken) => _inner.RollbackTransactionAsync(cancellationToken);
+
+        public void OnCommitted(Action action) => _inner.OnCommitted(action);
     }
 
     /// <summary>I-JOB-05: if the approval transaction rolls back, no job is enqueued and nothing is posted.</summary>

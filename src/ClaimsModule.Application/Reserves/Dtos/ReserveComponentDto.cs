@@ -14,5 +14,10 @@ public sealed class ReserveComponentDto
 
     public string Currency { get; init; } = "USD";
 
+    public ReserveComponentStatus Status { get; init; }
+
+    /// <summary>Approval status of the latest change; PendingApproval means a change awaits a decision.</summary>
+    public ApprovalStatus ApprovalStatus { get; init; }
+
     public IReadOnlyCollection<ReserveHistoryDto> History { get; init; } = [];
 }

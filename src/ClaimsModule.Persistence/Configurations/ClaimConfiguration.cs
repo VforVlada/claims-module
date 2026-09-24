@@ -25,7 +25,9 @@ public sealed class ClaimConfiguration : IEntityTypeConfiguration<Claim>
         builder.Property(c => c.UserCreated).HasMaxLength(255).IsRequired();
         builder.Property(c => c.UserModified).HasMaxLength(255);
 
-        builder.Property(c => c.RowVersion).IsRowVersion();
+        // Shadow property: optimistic concurrency is purely a persistence concern, so the token
+        // lives in the EF model only; the domain class never sees it.
+        builder.Property<byte[]>("RowVersion").IsRowVersion();
 
         builder.HasOne(c => c.Policy)
             .WithMany()

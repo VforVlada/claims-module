@@ -19,11 +19,12 @@ public static class DependencyInjection
         services.AddAutoMapper(assembly);
 
         // Registration order = pipeline order (outer to inner). DomainEventDispatchBehavior
-        // must sit outside UnitOfWorkBehavior so its post-next() logic runs after commit.
+        // must sit inside UnitOfWorkBehavior so event handlers' writes (audit rows) commit or
+        // roll back together with the command's own changes.
         services.AddTransient(typeof(IPipelineBehavior<,>), typeof(LoggingBehavior<,>));
         services.AddTransient(typeof(IPipelineBehavior<,>), typeof(ValidationBehavior<,>));
-        services.AddTransient(typeof(IPipelineBehavior<,>), typeof(DomainEventDispatchBehavior<,>));
         services.AddTransient(typeof(IPipelineBehavior<,>), typeof(UnitOfWorkBehavior<,>));
+        services.AddTransient(typeof(IPipelineBehavior<,>), typeof(DomainEventDispatchBehavior<,>));
 
         services.AddScoped<IClaimStatusTransitionValidator, ClaimStatusTransitionValidator>();
         services.AddSingleton<IReserveAuthorityEvaluator, ReserveAuthorityEvaluator>();

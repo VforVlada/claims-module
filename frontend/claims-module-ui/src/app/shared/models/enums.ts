@@ -114,6 +114,12 @@ export const DocumentTypeLabels: Record<DocumentType, string> = {
   [DocumentType.Correspondence]: 'Correspondence'
 };
 
+/** Mirrors ClaimsModule.Domain.Enums.ReserveComponentStatus: a reserve line closes with its claim. */
+export enum ReserveComponentStatus {
+  Open = 0,
+  Closed = 1
+}
+
 export enum ApprovalStatus {
   PendingApproval = 0,
   AutoApproved = 1,
@@ -141,7 +147,16 @@ export const PostingStatusLabels: Record<PostingStatus, string> = {
 };
 
 /** Mirrors ReserveAuthorityEvaluator's thresholds (Application layer) — client-side preview only. */
-export function estimateApprovalTier(absAmount: number): 'Auto' | 'Supervisor' | 'Manager' {
+export type ApprovalTierName = 'Auto' | 'Supervisor' | 'Manager';
+
+/** What the live authority indicator says for each tier (BR-R-02..04), shown in FNOL step 3 and the reserve form. */
+export const ApprovalTierMessages: Record<ApprovalTierName, string> = {
+  Auto: 'Auto-approved (up to $10,000)',
+  Supervisor: 'Requires Supervisor approval ($10,000.01 – $100,000)',
+  Manager: 'Requires Manager approval (over $100,000)'
+};
+
+export function estimateApprovalTier(absAmount: number): ApprovalTierName {
   if (absAmount <= 10_000) return 'Auto';
   if (absAmount <= 100_000) return 'Supervisor';
   return 'Manager';
@@ -176,3 +191,16 @@ export function sortByLabel<T extends number>(values: readonly T[], labels: Reco
 export function optionsByLabel<T extends number>(labels: Record<T, string>): T[] {
   return sortByLabel(Object.keys(labels).map(Number) as T[], labels);
 }
+
+/** Mirrors ClaimsModule.Application.Policies.Dtos.PolicyStatus: derived from the policy's effective period. */
+export enum PolicyStatus {
+  Active = 0,
+  Expired = 1,
+  NotYetEffective = 2
+}
+
+export const PolicyStatusLabels: Record<PolicyStatus, string> = {
+  [PolicyStatus.Active]: 'In force',
+  [PolicyStatus.Expired]: 'Expired',
+  [PolicyStatus.NotYetEffective]: 'Not yet effective'
+};

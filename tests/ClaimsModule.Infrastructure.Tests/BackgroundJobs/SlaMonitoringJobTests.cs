@@ -16,6 +16,11 @@ public class SlaMonitoringJobTests
         if (status != ClaimStatus.Draft)
         {
             claim.AddParty(PartyType.Individual, PartyRole.Claimant, "John Doe", null, null, "tester");
+            if (status == ClaimStatus.Closed)
+            {
+                claim.TransitionTo(ClaimStatus.Open, "tester"); // BR-C-06: a claim is opened before it can be closed
+            }
+
             claim.TransitionTo(status, "tester");
         }
 

@@ -42,6 +42,8 @@ public sealed class TestDbContext(DbContextOptions<TestDbContext> options) : DbC
 
     public DbSet<PolicyCoverage> PolicyCoverages => Set<PolicyCoverage>();
 
+    public void DiscardChanges() => ChangeTracker.Clear();
+
     public IReadOnlyCollection<IHasDomainEvents> GetEntitiesWithDomainEvents() => ChangeTracker
         .Entries<IHasDomainEvents>()
         .Select(e => e.Entity)

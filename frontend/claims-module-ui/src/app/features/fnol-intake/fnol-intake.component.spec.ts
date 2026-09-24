@@ -17,7 +17,7 @@ import { MatChipHarness } from '@angular/material/chips/testing';
 
 import { FnolIntakeComponent } from './fnol-intake.component';
 import { SnackbarService } from '../../shared/services/snackbar.service';
-import { PartyRole, ReserveComponentType } from '../../shared/models/enums';
+import { ApprovalTierMessages, ApprovalTierName, PartyRole, PolicyStatus, ReserveComponentType } from '../../shared/models/enums';
 import { CauseOfLossCodeDto } from '../../shared/models/reference-data.models';
 import { API } from '../../testing/fixtures';
 
@@ -240,6 +240,22 @@ describe('FnolIntakeComponent', () => {
       expect(await input.isDisabled()).toBeFalse();
     });
 
+    it('keeps searching after a failed request, without reporting "no matches" for the failure', fakeAsync(() => {
+      const search = component.step1Form.get('policySearch')!;
+
+      search.setValue('POL-1');
+      tick(300);
+      http.expectOne((r) => r.url === `${API}/policies/search`).flush(null, { status: 500, statusText: 'Server Error' });
+      expect(component.policyNoMatches()).toBeFalse();
+
+      search.setValue('POL-2');
+      tick(300);
+      const retry = http.expectOne((r) => r.url === `${API}/policies/search`);
+      expect(retry.request.params.get('searchTerm')).toBe('POL-2');
+      retry.flush([]);
+      expect(component.policyNoMatches()).toBeTrue();
+    }));
+
     it('does not search for terms shorter than 2 characters', fakeAsync(() => {
       component.step1Form.get('policySearch')!.setValue('P');
       tick(300);
@@ -256,12 +272,12 @@ describe('FnolIntakeComponent', () => {
       expect(requests[0].request.params.get('searchTerm')).toBe('POL-2026');
       requests[0].flush([
         {
-          id: 'pol-1',
+          policyId: 'pol-1',
           policyNumber: 'POL-2026-000001',
           clientName: 'Acme Corp',
           effectiveDate: '2026-01-01',
           expirationDate: '2026-12-31',
-          isInForce: true
+          status: PolicyStatus.Active
         }
       ]);
 
@@ -269,7 +285,7 @@ describe('FnolIntakeComponent', () => {
       await autocomplete.focus();
       await autocomplete.selectOption({ text: /POL-2026-000001/ });
 
-      expect(component.selectedPolicy()?.id).toBe('pol-1');
+      expect(component.selectedPolicy()?.policyId).toBe('pol-1');
       expect(text()).toContain('In force');
       // The picked policy stays visible in the search box (it used to be blanked right after picking).
       expect(await input.getValue()).toBe('POL-2026-000001 — Acme Corp');
@@ -373,7 +389,7 @@ describe('FnolIntakeComponent', () => {
   // ---- F-07 ----------------------------------------------------------------------------------
 
   describe('F-07: authority indicator', () => {
-    const cases: [string, string][] = [
+    const cases: [string, ApprovalTierName][] = [
       ['10000', 'Auto'],
       ['10000.01', 'Supervisor'],
       ['100000', 'Supervisor'],
@@ -381,14 +397,14 @@ describe('FnolIntakeComponent', () => {
     ];
 
     for (const [amount, tier] of cases) {
-      it(`${amount} -> requires ${tier} approval`, async () => {
+      it(`${amount} -> ${ApprovalTierMessages[tier]}`, async () => {
         const s3 = await goToStep3();
         await (await s3.getHarness(MatSlideToggleHarness.with({ label: /Open an initial reserve/ }))).check();
         await (await control(s3, 'Amount', MatInputHarness)).setValue(amount);
 
-        expect(text()).toContain(`Requires ${tier} approval`);
-        for (const other of ['Auto', 'Supervisor', 'Manager'].filter((t) => t !== tier)) {
-          expect(text()).not.toContain(`Requires ${other} approval`);
+        expect(text()).toContain(ApprovalTierMessages[tier]);
+        for (const other of (Object.keys(ApprovalTierMessages) as ApprovalTierName[]).filter((t) => t !== tier)) {
+          expect(text()).not.toContain(ApprovalTierMessages[other]);
         }
       });
     }

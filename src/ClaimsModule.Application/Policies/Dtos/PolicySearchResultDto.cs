@@ -2,7 +2,7 @@ namespace ClaimsModule.Application.Policies.Dtos;
 
 public sealed class PolicySearchResultDto
 {
-    public Guid Id { get; init; }
+    public Guid PolicyId { get; init; }
 
     public string PolicyNumber { get; init; } = string.Empty;
 
@@ -12,5 +12,6 @@ public sealed class PolicySearchResultDto
 
     public DateTimeOffset ExpirationDate { get; init; }
 
-    public bool IsInForce { get; init; }
+    /// <summary>Status today (the server's IDateTimeProvider clock), from the effective period.</summary>
+    public PolicyStatus Status { get; init; }
 }

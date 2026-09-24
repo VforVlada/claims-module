@@ -5,7 +5,7 @@ using Microsoft.EntityFrameworkCore;
 namespace ClaimsModule.IntegrationTests.PersistenceTests;
 
 /// <summary>
-/// I-DB-08: two contexts update the same claim; the second save fails. Claim.RowVersion
+/// I-DB-08: two contexts update the same claim; the second save fails. The RowVersion shadow property
 /// (IsRowVersion()) is what makes EF include the original row version in the second UPDATE's
 /// WHERE clause, so it affects zero rows and EF raises DbUpdateConcurrencyException. See
 /// ExceptionHandlingMiddlewareTests for the "API returns 409" half of this test id.

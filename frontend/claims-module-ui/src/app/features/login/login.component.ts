@@ -3,7 +3,6 @@ import { Router } from '@angular/router';
 import { MatCardModule } from '@angular/material/card';
 import { MatIconModule } from '@angular/material/icon';
 import { AuthService } from '../../core/services/auth.service';
-import { SnackbarService } from '../../shared/services/snackbar.service';
 
 /** Display names for the mock-login role keys returned by GET /api/auth/users. */
 const ROLE_LABELS: Record<string, string> = {
@@ -27,8 +26,7 @@ export class LoginComponent implements OnInit {
 
   constructor(
     private readonly auth: AuthService,
-    private readonly router: Router,
-    private readonly snackbar: SnackbarService
+    private readonly router: Router
   ) {}
 
   ngOnInit(): void {
@@ -37,10 +35,8 @@ export class LoginComponent implements OnInit {
         this.roles.set(roles);
         this.loadingRoles.set(false);
       },
-      error: () => {
-        this.loadingRoles.set(false);
-        this.snackbar.error('Could not reach the Claims Module API. Is it running?');
-      }
+      // The error interceptor already shows the snackbar (with the right message for the status).
+      error: () => this.loadingRoles.set(false)
     });
   }
 
