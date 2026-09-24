@@ -31,7 +31,7 @@ test('E2E-01 handler creates a claim with a 5,000 reserve via FNOL; auto-approve
   step = activeStep(page);
   await step.getByRole('switch', { name: /Open an initial reserve/ }).click();
   await step.getByLabel('Amount').fill('5000');
-  await expect(step.getByText('Requires Auto approval')).toBeVisible();
+  await expect(step.getByText('Auto-approved (up to $10,000)')).toBeVisible();
   await step.getByRole('button', { name: 'Submit Claim' }).click();
 
   // Success banner with the claim number and a link

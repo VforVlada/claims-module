@@ -16,6 +16,7 @@ public sealed class GetClaimAuditLogQueryHandler(IApplicationDbContext context, 
         var query = context.ClaimAuditLogs.AsNoTracking()
             .Where(a => a.ClaimId == request.ClaimId)
             .OrderByDescending(a => a.CreatedAt)
+            .ThenBy(a => a.Id) // stable tiebreak: entries written in one save can share a timestamp, and paging must not repeat or skip them
             .ProjectTo<ClaimAuditLogDto>(mapper.ConfigurationProvider);
 
         return PagedList<ClaimAuditLogDto>.CreateAsync(query, request.PageNumber, request.PageSize, cancellationToken);

@@ -12,9 +12,12 @@ public sealed class ClaimReserveComponentConfiguration : IEntityTypeConfiguratio
         builder.HasKey(rc => rc.Id);
 
         builder.Property(rc => rc.ComponentType).HasConversion<string>().HasMaxLength(50).IsRequired();
+        builder.Property(rc => rc.Status).HasConversion<string>().HasMaxLength(50).IsRequired();
+        builder.Property(rc => rc.ApprovalStatus).HasConversion<string>().HasMaxLength(50).IsRequired();
         builder.Property(rc => rc.UserCreated).HasMaxLength(255).IsRequired();
         builder.Property(rc => rc.UserModified).HasMaxLength(255);
-        builder.Property(rc => rc.RowVersion).IsRowVersion();
+        // Shadow concurrency token, as on Claim.
+        builder.Property<byte[]>("RowVersion").IsRowVersion();
 
         builder.ComplexProperty(rc => rc.CurrentAmount, money =>
         {

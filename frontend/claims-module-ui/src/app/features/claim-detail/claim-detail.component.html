@@ -193,9 +193,9 @@
                     <mat-error>{{ reasonError() }}</mat-error>
                   </mat-form-field>
 
-                  @if (reserveTierPreview) {
-                    <span class="tier-indicator" [class]="'tier-' + reserveTierPreview.toLowerCase()">
-                      Requires {{ reserveTierPreview }} approval
+                  @if (reserveTierPreview; as tier) {
+                    <span class="tier-indicator" [class]="'tier-' + tier.toLowerCase()">
+                      {{ approvalTierMessages[tier] }}
                     </span>
                   }
 
@@ -214,7 +214,13 @@
                 <mat-card class="reserve-card">
                   <mat-card-header>
                     <mat-card-title>{{ reserveComponentTypeLabels[component.componentType] }}</mat-card-title>
-                    <mat-card-subtitle>{{ component.currentAmount | currency: component.currency }}</mat-card-subtitle>
+                    <mat-card-subtitle>
+                      {{ component.currentAmount | currency: component.currency }}
+                      <app-status-badge [label]="approvalBadge(component.approvalStatus).label" [color]="approvalBadge(component.approvalStatus).color"></app-status-badge>
+                      @if (component.status === ReserveComponentStatus.Closed) {
+                        <app-status-badge label="Closed" color="neutral"></app-status-badge>
+                      }
+                    </mat-card-subtitle>
                   </mat-card-header>
                   <mat-card-content>
                     <div class="table-scroll">
@@ -358,17 +364,17 @@
               <table class="plain-table">
                 <thead>
                   <tr>
-                    <th>Action</th>
-                    <th>Details</th>
-                    <th>Performed By</th>
-                    <th>When</th>
+                    <th>Event</th>
+                    <th>Description</th>
+                    <th>User</th>
+                    <th>Timestamp</th>
                   </tr>
                 </thead>
                 <tbody>
                   @for (entry of auditEntries(); track entry.id) {
                     <tr>
                       <td>{{ entry.action }}</td>
-                      <td>{{ entry.newValues || '—' }}</td>
+                      <td>{{ auditDescription(entry) }}</td>
                       <td>{{ entry.performedBy }}</td>
                       <td>{{ entry.createdAt | date: 'medium' }}</td>
                     </tr>

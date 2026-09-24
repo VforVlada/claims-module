@@ -100,6 +100,15 @@ public sealed class ClaimsDbContext(DbContextOptions<ClaimsDbContext> options, I
             throw new InvalidOperationException("Claim audit log entries are append-only and cannot be modified or deleted.");
         }
 
+        // Soft delete: a Remove() never physically deletes a row — it becomes IsDeleted/DeletedAt,
+        // which the global query filter then hides. (Runs after the audit-log guard above, so an
+        // audit row still can't be deleted even softly.) Cascade-deleted dependents are converted too.
+        foreach (var entry in ChangeTracker.Entries<BaseEntity>().Where(e => e.State == EntityState.Deleted).ToList())
+        {
+            entry.State = EntityState.Modified;
+            entry.Entity.MarkDeleted(now);
+        }
+
         // Background jobs have no current user; keep the actor they set ("system") rather than blanking it.
         var actor = string.IsNullOrEmpty(currentUser.UserName) ? null : currentUser.UserName;
 
@@ -136,6 +145,8 @@ public sealed class ClaimsDbContext(DbContextOptions<ClaimsDbContext> options, I
 
     private static bool IsSlaBookkeepingOnly(Microsoft.EntityFrameworkCore.ChangeTracking.EntityEntry<BaseEntity> entry) =>
         entry.Entity is Claim && entry.Properties.Where(p => p.IsModified).All(p => SlaBookkeepingProperties.Contains(p.Metadata.Name));
+
+    public void DiscardChanges() => ChangeTracker.Clear();
 
     public IReadOnlyCollection<IHasDomainEvents> GetEntitiesWithDomainEvents() => ChangeTracker
         .Entries<IHasDomainEvents>()

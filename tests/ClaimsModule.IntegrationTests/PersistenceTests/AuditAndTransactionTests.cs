@@ -1,3 +1,5 @@
+using System.Net;
+using System.Net.Http.Json;
 using ClaimsModule.Application.Common.Interfaces;
 using ClaimsModule.Application.Common.Messaging;
 using ClaimsModule.Domain.Common;
@@ -101,5 +103,32 @@ public sealed class AuditAndTransactionTests(ApiWebApplicationFactory factory) :
         await Assert.ThrowsAsync<InvalidOperationException>(() => context.SaveChangesAsync());
         await using var verify = Factory.CreateDbContext();
         Assert.NotEqual("tampered", (await verify.ClaimAuditLogs.AsNoTracking().SingleAsync(a => a.Id == row.Id)).NewValues);
+    }
+
+    private sealed class FailingAuditLogService : IAuditLogService
+    {
+        public Task LogAsync(Guid claimId, string action, string? oldValues, string? newValues, string performedBy, CancellationToken cancellationToken, string? idempotencyKey = null) =>
+            throw new InvalidOperationException("Simulated audit write failure.");
+    }
+
+    /// <summary>
+    /// ARCH-05: domain events are dispatched inside the command's transaction, so a failing audit
+    /// write (the ClaimCreated handler) rolls the claim back too — no claim ever exists without
+    /// its CLAIM_CREATED entry.
+    /// </summary>
+    [Fact]
+    public async Task DomainEventHandlerFails_CommandIsRolledBack()
+    {
+        using var failingApp = Factory.WithWebHostBuilder(b => b.ConfigureTestServices(services =>
+            services.AddScoped<IAuditLogService, FailingAuditLogService>()));
+        var client = failingApp.CreateClient();
+        client.DefaultRequestHeaders.Authorization = Factory.CreateHandlerClient().DefaultRequestHeaders.Authorization;
+        await using var context = Factory.CreateDbContext();
+        var claimsBefore = await context.Claims.IgnoreQueryFilters().CountAsync();
+
+        var response = await client.PostAsJsonAsync("/api/claims", new ClaimBuilder().BuildCommand());
+
+        Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
+        Assert.Equal(claimsBefore, await context.Claims.IgnoreQueryFilters().CountAsync());
     }
 }

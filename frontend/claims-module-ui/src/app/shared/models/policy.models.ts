@@ -1,10 +1,12 @@
+import { PolicyStatus } from './enums';
+
 export interface PolicySearchResultDto {
-  id: string;
+  policyId: string;
   policyNumber: string;
   clientName: string;
   effectiveDate: string;
   expirationDate: string;
-  isInForce: boolean;
+  status: PolicyStatus;
 }
 
 export interface PolicyCoverageDto {
@@ -14,3 +16,4 @@ export interface PolicyCoverageDto {
   deductible: number;
   currency: string;
 }
+

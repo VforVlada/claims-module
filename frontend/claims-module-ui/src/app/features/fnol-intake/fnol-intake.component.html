@@ -23,11 +23,11 @@
             <mat-label>Search policy by number or client name</mat-label>
             <input matInput formControlName="policySearch" [matAutocomplete]="policyAuto" [maxlength]="limits.search" />
             <mat-autocomplete #policyAuto="matAutocomplete" [displayWith]="policyLabel" (optionSelected)="selectPolicy($event.option.value)">
-              @for (policy of policyResults(); track policy.id) {
+              @for (policy of policyResults(); track policy.policyId) {
                 <mat-option [value]="policy">
                   {{ policy.policyNumber }} — {{ policy.clientName }}
-                  <span [class.in-force]="policy.isInForce" [class.not-in-force]="!policy.isInForce">
-                    {{ policy.isInForce ? 'In force' : 'Not in force' }}
+                  <span [class.in-force]="policy.status === PolicyStatus.Active" [class.not-in-force]="policy.status !== PolicyStatus.Active">
+                    {{ policyStatusLabels[policy.status] }}
                   </span>
                 </mat-option>
               }
@@ -39,9 +39,9 @@
           </mat-form-field>
 
           @if (selectedPolicy(); as policy) {
-            <div class="policy-badge" [class.in-force]="policy.isInForce" [class.not-in-force]="!policy.isInForce">
-              <mat-icon>{{ policy.isInForce ? 'check_circle' : 'error' }}</mat-icon>
-              {{ policy.isInForce ? 'In force' : 'Not in force' }}
+            <div class="policy-badge" [class.in-force]="policy.status === PolicyStatus.Active" [class.not-in-force]="policy.status !== PolicyStatus.Active">
+              <mat-icon>{{ policy.status === PolicyStatus.Active ? 'check_circle' : 'error' }}</mat-icon>
+              {{ policyStatusLabels[policy.status] }}
               <button mat-icon-button (click)="clearPolicy()" aria-label="Clear policy"><mat-icon>close</mat-icon></button>
             </div>
           }
@@ -267,10 +267,10 @@
               <mat-error>{{ fieldError(step3Form.get('currency')) }}</mat-error>
             </mat-form-field>
 
-            @if (estimatedTier) {
-              <div class="tier-indicator" [class]="'tier-' + estimatedTier.toLowerCase()">
+            @if (estimatedTier; as tier) {
+              <div class="tier-indicator" [class]="'tier-' + tier.toLowerCase()">
                 <mat-icon>gavel</mat-icon>
-                Requires {{ estimatedTier }} approval
+                {{ approvalTierMessages[tier] }}
               </div>
             }
           </div>

@@ -7,6 +7,9 @@ using Hangfire;
 using Hangfire.SqlServer;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace ClaimsModule.Infrastructure;
 
@@ -22,15 +25,10 @@ public static class DependencyInjection
         services.AddSingleton<IJwtTokenService, JwtTokenService>();
 
         services.Configure<StorageSettings>(configuration.GetSection(StorageSettings.SectionName));
-        var storageProvider = configuration.GetSection(StorageSettings.SectionName)["Provider"];
-        if (string.Equals(storageProvider, "AzureBlob", StringComparison.OrdinalIgnoreCase))
-        {
-            services.AddSingleton<IStorageService, AzureBlobStorageService>();
-        }
-        else
-        {
-            services.AddSingleton<IStorageService, LocalFileSystemStorageService>();
-        }
+        services.AddSingleton<IStorageService>(sp => StorageServiceFactory.Create(
+            sp.GetRequiredService<IOptions<StorageSettings>>(),
+            sp.GetRequiredService<IHostEnvironment>().IsDevelopment(),
+            sp.GetRequiredService<ILoggerFactory>().CreateLogger(typeof(StorageServiceFactory))));
 
         services.AddScoped<IBackgroundJobScheduler, HangfireBackgroundJobScheduler>();
         services.AddScoped<PostGlReserveChangeJob>();

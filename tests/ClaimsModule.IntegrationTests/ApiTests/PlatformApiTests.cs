@@ -78,11 +78,29 @@ public sealed class PlatformApiTests(ApiWebApplicationFactory factory) : Integra
         var orgBResults = (await Factory.CreateOrgBClient().GetFromJsonAsync<List<PolicySearchResultDto>>("/api/policies/search?searchTerm=POL"))!;
 
         var acme = Assert.Single(results);
-        Assert.Equal(Seeded.ActivePolicy, acme.Id);
-        Assert.True(acme.IsInForce);
+        Assert.Equal(Seeded.ActivePolicy, acme.PolicyId);
+        Assert.Equal("POL-2026-000101", acme.PolicyNumber);
+        Assert.Equal(PolicyStatus.Active, acme.Status);
         Assert.NotEmpty(coverage);
         Assert.All(coverage, c => Assert.True(c.Limit > 0));
         Assert.Empty(orgBResults);
+    }
+
+    /// <summary>§3.3.2: search by client name as well as number; an expired policy reports Expired; wildcards match literally; a blank term is a 400.</summary>
+    [Fact]
+    public async Task PolicySearch_StatusWildcardsAndValidation()
+    {
+        var client = Factory.CreateHandlerClient();
+        async Task<List<PolicySearchResultDto>> Search(string term) =>
+            (await client.GetFromJsonAsync<List<PolicySearchResultDto>>($"/api/policies/search?searchTerm={Uri.EscapeDataString(term)}"))!;
+
+        Assert.Equal(PolicyStatus.Expired, Assert.Single(await Search("Meridian")).Status);
+        Assert.Equal(Seeded.ExpiredPolicy, Assert.Single(await Search("POL-2024")).PolicyId);
+        Assert.Empty(await Search("%%"));
+        Assert.Empty(await Search("POL_2026"));
+
+        var blank = await client.GetAsync("/api/policies/search?searchTerm=%20%20");
+        Assert.Equal(HttpStatusCode.BadRequest, blank.StatusCode);
     }
 
     [Fact]

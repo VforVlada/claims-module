@@ -82,4 +82,27 @@ public sealed class TenantIsolationAndSoftDeleteTests(ApiWebApplicationFactory f
         await using var verify = Factory.CreateDbContext();
         Assert.Equal(2, await verify.ClaimParties.IgnoreQueryFilters().CountAsync(p => p.ClaimId == claim.Id));
     }
+
+    /// <summary>I-DB-05: Remove() is converted to a soft delete — the row stays, flagged, and drops out of filtered reads.</summary>
+    [Fact]
+    public async Task RemovedParty_IsSoftDeletedNotPhysicallyDeleted()
+    {
+        var claim = await Factory.SeedClaimAsync(new ClaimBuilder().WithParties(
+            new ClaimPartyInput(PartyType.Individual, PartyRole.Claimant, "Claire Claimant", null, null),
+            new ClaimPartyInput(PartyType.Individual, PartyRole.Witness, "Walter Witness", null, null)));
+        Guid witnessId;
+        await using (var context = Factory.CreateDbContext())
+        {
+            var witness = await context.ClaimParties.SingleAsync(p => p.ClaimId == claim.Id && p.PartyRole == PartyRole.Witness);
+            witnessId = witness.Id;
+            context.ClaimParties.Remove(witness);
+            await context.SaveChangesAsync();
+        }
+
+        await using var verify = Factory.CreateDbContext();
+        Assert.False(await verify.ClaimParties.AnyAsync(p => p.Id == witnessId));
+        var row = await verify.ClaimParties.IgnoreQueryFilters().SingleAsync(p => p.Id == witnessId);
+        Assert.True(row.IsDeleted);
+        Assert.NotNull(row.DeletedAt);
+    }
 }

@@ -142,6 +142,19 @@ public sealed class ClaimsApiTests(ApiWebApplicationFactory factory) : Integrati
         Assert.Equal(7, page1.Items.Concat(page2.Items).Concat(page3.Items).Select(c => c.Id).Distinct().Count());
     }
 
+    /// <summary>An inverted date range is a bad filter (400 with a field error), not "no claims".</summary>
+    [Fact]
+    public async Task List_ToDateBeforeFromDate_Returns400()
+    {
+        var from = Uri.EscapeDataString(DateTimeOffset.UtcNow.ToString("O"));
+        var to = Uri.EscapeDataString(DateTimeOffset.UtcNow.AddDays(-1).ToString("O"));
+
+        var response = await Factory.CreateHandlerClient().GetAsync($"/api/claims?fromDate={from}&toDate={to}");
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Contains("ToDate", await response.Content.ReadAsStringAsync());
+    }
+
     /// <summary>I-API-06: detail carries the whole aggregate.</summary>
     [Fact]
     public async Task GetById_ReturnsPartiesRiskObjectsAndReserves()

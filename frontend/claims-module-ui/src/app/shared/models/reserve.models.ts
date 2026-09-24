@@ -1,4 +1,4 @@
-import { ApprovalStatus, ApprovalTier, PostingStatus, ReserveComponentType } from './enums';
+import { ApprovalStatus, ApprovalTier, PostingStatus, ReserveComponentStatus, ReserveComponentType } from './enums';
 
 export interface ReserveHistoryDto {
   id: string;
@@ -30,6 +30,9 @@ export interface ReserveComponentDto {
   componentType: ReserveComponentType;
   currentAmount: number;
   currency: string;
+  status: ReserveComponentStatus;
+  /** Approval status of the latest change; PendingApproval means a change awaits a decision. */
+  approvalStatus: ApprovalStatus;
   history: ReserveHistoryDto[];
 }
 

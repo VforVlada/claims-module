@@ -17,7 +17,9 @@ namespace ClaimsModule.Infrastructure.BackgroundJobs;
 /// </summary>
 public sealed class PostGlReserveChangeJob(IApplicationDbContext context, IAuditLogService auditLog)
 {
-    [AutomaticRetry(Attempts = 3, OnAttemptsExceeded = AttemptsExceededAction.Fail)]
+    public const int MaxRetries = 3;
+
+    [AutomaticRetry(Attempts = MaxRetries, OnAttemptsExceeded = AttemptsExceededAction.Fail)]
     public async Task ExecuteAsync(Guid reserveHistoryId, Guid claimId, Guid reserveComponentId, PerformContext? hangfireContext = null)
     {
         // No HTTP user in a Hangfire job, so the tenant query filter would hide every row (it
@@ -42,21 +44,43 @@ public sealed class PostGlReserveChangeJob(IApplicationDbContext context, IAudit
             var journalDescription = JournalEntry(history.Amount, reserveComponentId, history.IdempotencyKey);
             await auditLog.LogAsync(claimId, "GL_POSTING_SIMULATED", null, journalDescription, "system", CancellationToken.None, history.IdempotencyKey);
         }
-        catch (DbUpdateException)
-        {
-            // Another execution of this same reserveHistoryId (a Hangfire retry racing the
-            // original, or a duplicate enqueue) already won and posted it first. This
-            // execution's audit-row insert collided with that one's IdempotencyKey, so
-            // nothing from this run persisted — exit cleanly (I-JOB-02, I-JOB-03).
-        }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            history.MarkPostingFailed(jobId);
-            await context.SaveChangesAsync(CancellationToken.None);
-            await auditLog.LogAsync(claimId, "GL_POSTING_FAILED", null, ex.Message, "system", CancellationToken.None);
+            // Nothing from this run persisted; drop the in-memory MarkPosted and the unsaved
+            // audit row so neither leaks into the saves below.
+            context.DiscardChanges();
+
+            if (ex is DbUpdateException && await IsAlreadyPostedAsync(history.IdempotencyKey))
+            {
+                // Another execution of this same reserveHistoryId (a Hangfire retry racing the
+                // original, or a duplicate enqueue) won and posted it first; this run's audit
+                // insert collided with its IdempotencyKey. Exit cleanly (I-JOB-02, I-JOB-03).
+                // Checked by re-reading rather than by matching a provider error code, so any
+                // other DbUpdateException (timeout, deadlock) still fails and is retried.
+                return;
+            }
+
+            // Mark Failed only once Hangfire has no retries left; an earlier failure leaves the
+            // posting Pending for the next attempt.
+            if (IsFinalAttempt(hangfireContext))
+            {
+                var failed = await context.ReserveHistories.IgnoreQueryFilters().FirstAsync(h => h.Id == reserveHistoryId, CancellationToken.None);
+                failed.MarkPostingFailed(jobId);
+
+                // LogAsync saves, so the Failed status and its audit entry commit together.
+                await auditLog.LogAsync(claimId, "GL_POSTING_FAILED", null, ex.Message, "system", CancellationToken.None);
+            }
+
             throw;
         }
     }
+
+    private Task<bool> IsAlreadyPostedAsync(string idempotencyKey) =>
+        context.ClaimAuditLogs.IgnoreQueryFilters().AnyAsync(a => a.IdempotencyKey == idempotencyKey, CancellationToken.None);
+
+    /// <summary>Run directly (no Hangfire context, e.g. in tests) there is no retry, so every attempt is the last.</summary>
+    private static bool IsFinalAttempt(PerformContext? hangfireContext) =>
+        hangfireContext is null || hangfireContext.GetJobParameter<int>("RetryCount") >= MaxRetries;
 
     /// <summary>
     /// The simulated journal for a change in outstanding reserves. An increase debits the

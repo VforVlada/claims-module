@@ -167,6 +167,13 @@ public sealed class Claim : AggregateRoot
             throw new ClaimInvariantViolationException($"Claim is already in status {Status}.");
         }
 
+        // BR-C-06: the seeded ClaimStatusTransitions table has no Draft → Closed row, but this rule
+        // holds whatever the table says — a claim must at least be opened before it is closed.
+        if (Status == ClaimStatus.Draft && newStatus == ClaimStatus.Closed)
+        {
+            throw new ClaimInvariantViolationException("A draft claim cannot be closed directly; open it first.");
+        }
+
         if (Status == ClaimStatus.Draft && !_parties.Any(p => p.PartyRole == PartyRole.Claimant))
         {
             throw new ClaimInvariantViolationException("At least one Claimant party is required before a claim can leave Draft status.");
@@ -175,6 +182,19 @@ public sealed class Claim : AggregateRoot
         var oldStatus = Status;
         Status = newStatus;
         ClearSlaBreach();
+
+        // Reserve lines follow the claim: inactive while it is closed or withdrawn.
+        foreach (var component in _reserveComponents)
+        {
+            if (newStatus is ClaimStatus.Closed or ClaimStatus.Withdrawn)
+            {
+                component.Close();
+            }
+            else if (newStatus == ClaimStatus.Reopened)
+            {
+                component.Reopen();
+            }
+        }
         AddDomainEvent(new ClaimStatusChangedEvent(Id, oldStatus, newStatus, changedBy));
     }
 

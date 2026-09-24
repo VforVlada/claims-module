@@ -1,3 +1,4 @@
+using ClaimsModule.Application.Common.Interfaces;
 using ClaimsModule.Domain.Entities;
 using ClaimsModule.Domain.Enums;
 using ClaimsModule.Domain.ValueObjects;
@@ -101,6 +102,38 @@ public class PostGlReserveChangeJobTests
         await sut.ExecuteAsync(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
 
         Assert.Empty(await context.ClaimAuditLogs.ToListAsync());
+    }
+
+    /// <summary>Fails the GL posting's save the way a timeout or deadlock would — a DbUpdateException that is not a duplicate key.</summary>
+    private sealed class TransientFailureAuditLogService(IAuditLogService inner) : IAuditLogService
+    {
+        public Task LogAsync(Guid claimId, string action, string? oldValues, string? newValues, string performedBy, CancellationToken cancellationToken, string? idempotencyKey = null) =>
+            action == "GL_POSTING_SIMULATED"
+                ? throw new DbUpdateException("Simulated transient failure.")
+                : inner.LogAsync(claimId, action, oldValues, newValues, performedBy, cancellationToken, idempotencyKey);
+    }
+
+    /// <summary>
+    /// A DbUpdateException that is not an idempotency-key collision must fail the job (so Hangfire
+    /// retries) rather than be mistaken for "already posted". Run without a Hangfire context this
+    /// is the final attempt, so the posting is marked Failed and audited.
+    /// </summary>
+    [Fact]
+    public async Task ExecuteAsync_TransientSaveFailure_RethrowsAndMarksFailedOnFinalAttempt()
+    {
+        using var context = TestDbContext.Create();
+        var (claimId, componentId, historyId) = await SeedApprovedReserve(context);
+        var auditLog = new TransientFailureAuditLogService(new TestAuditLogService(context, new FakeDateTimeProvider()));
+        var sut = new PostGlReserveChangeJob(context, auditLog);
+
+        await Assert.ThrowsAsync<DbUpdateException>(() => sut.ExecuteAsync(historyId, claimId, componentId));
+
+        context.DiscardChanges();
+        var history = await context.ReserveHistories.SingleAsync(h => h.Id == historyId);
+        Assert.Equal(PostingStatus.Failed, history.PostingStatus);
+        var actions = await context.ClaimAuditLogs.Where(a => a.ClaimId == claimId).Select(a => a.Action).ToListAsync();
+        Assert.Contains("GL_POSTING_FAILED", actions);
+        Assert.DoesNotContain("GL_POSTING_SIMULATED", actions);
     }
 }
 

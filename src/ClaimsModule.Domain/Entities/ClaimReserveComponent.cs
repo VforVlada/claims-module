@@ -23,6 +23,15 @@ public sealed class ClaimReserveComponent : AggregateRoot
 
     public Money CurrentAmount { get; private set; }
 
+    /// <summary>Open while the claim is active; see <see cref="ReserveComponentStatus"/>.</summary>
+    public ReserveComponentStatus Status { get; private set; } = ReserveComponentStatus.Open;
+
+    /// <summary>
+    /// The approval status of the latest change, kept in step with History by every method that
+    /// adds or decides one. PendingApproval therefore means "a change is waiting for a decision".
+    /// </summary>
+    public ApprovalStatus ApprovalStatus { get; private set; }
+
     public IReadOnlyCollection<ReserveHistory> History => _history.AsReadOnly();
 
     public static ClaimReserveComponent Open(
@@ -53,9 +62,11 @@ public sealed class ClaimReserveComponent : AggregateRoot
     /// </summary>
     public ReserveHistory SubmitChange(Money newAmount, ApprovalTier tier, string requestedBy, string? changeReason = null)
     {
+        EnsureOpen();
+
         if (_history.Any(h => h.ApprovalStatus == ApprovalStatus.PendingApproval))
         {
-            throw new InvalidReserveOperationException($"Reserve component '{Id}' already has a change pending approval; it must be decided before another can be submitted.");
+            throw new InvalidReserveOperationException("This reserve already has a change pending approval. Approve or reject it before submitting another.");
         }
 
         // BR-R-01: outstanding reserves are positive; a RecoveryReserve is money expected back,
@@ -86,6 +97,8 @@ public sealed class ClaimReserveComponent : AggregateRoot
 
     public void Approve(Guid reserveHistoryId, string approvedBy, DateTimeOffset decidedAt)
     {
+        EnsureOpen();
+
         var history = GetHistoryOrThrow(reserveHistoryId);
         history.Approve(approvedBy, decidedAt);
         RecalculateBalance();
@@ -93,17 +106,33 @@ public sealed class ClaimReserveComponent : AggregateRoot
         AddDomainEvent(new ReserveApprovedEvent(Id, ClaimId, history.Id, history.Amount));
     }
 
+    /// <summary>Allowed on a closed line too: rejecting a change left pending at closure just withdraws it.</summary>
     public void Reject(Guid reserveHistoryId, string rejectedBy, string reason, DateTimeOffset decidedAt)
     {
         var history = GetHistoryOrThrow(reserveHistoryId);
         history.Reject(rejectedBy, reason, decidedAt);
+        RecalculateBalance();
 
         AddDomainEvent(new ReserveRejectedEvent(Id, ClaimId, history.Id, reason));
     }
 
+    /// <summary>Called by the owning Claim when it is closed or withdrawn.</summary>
+    internal void Close() => Status = ReserveComponentStatus.Closed;
+
+    /// <summary>Called by the owning Claim when it is reopened.</summary>
+    internal void Reopen() => Status = ReserveComponentStatus.Open;
+
+    private void EnsureOpen()
+    {
+        if (Status == ReserveComponentStatus.Closed)
+        {
+            throw new InvalidReserveOperationException("This reserve is closed because its claim is closed or withdrawn. Reopen the claim to change it.");
+        }
+    }
+
     private ReserveHistory GetHistoryOrThrow(Guid reserveHistoryId) =>
         _history.SingleOrDefault(h => h.Id == reserveHistoryId)
-        ?? throw new InvalidReserveOperationException($"Reserve history '{reserveHistoryId}' does not belong to reserve component '{Id}'.");
+        ?? throw new InvalidReserveOperationException("That reserve change does not belong to this reserve. Reload the claim and try again.");
 
     private void RecalculateBalance()
     {
@@ -111,5 +140,6 @@ public sealed class ClaimReserveComponent : AggregateRoot
         CurrentAmount = _history
             .Where(h => h.IsBalanceContributing)
             .Aggregate(Money.Zero(currency), (sum, h) => sum + h.Amount);
+        ApprovalStatus = _history.MaxBy(h => h.ChangeSequence)!.ApprovalStatus;
     }
 }

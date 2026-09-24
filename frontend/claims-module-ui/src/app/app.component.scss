@@ -1,0 +1,8 @@
+
+// Sits directly under the toolbar; fixed height so showing the bar never moves the page.
+.global-loading {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  height: 4px;
+}

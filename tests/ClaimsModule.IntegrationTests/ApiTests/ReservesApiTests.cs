@@ -170,4 +170,34 @@ public sealed class ReservesApiTests(ApiWebApplicationFactory factory) : Integra
 
         Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
+
+    /// <summary>
+    /// §3.3.3 list: each component reports its current amount, its approval status (the latest
+    /// change's) and its history. Closing the claim closes its reserve lines, so a change left
+    /// pending can no longer be approved (422) but can still be rejected.
+    /// </summary>
+    [Fact]
+    public async Task List_ReportsApprovalStatusAndLineStatus_ClosedClaimBlocksApproval()
+    {
+        var (reserve, historyId) = await OpenPendingReserveAsync(50_000m);
+        var supervisor = Factory.CreateSupervisorClient();
+        async Task<ReserveComponentDto> ListSingle() =>
+            Assert.Single((await supervisor.GetFromJsonAsync<List<ReserveComponentDto>>($"/api/claims/{reserve.ClaimId}/reserves"))!);
+
+        var pending = await ListSingle();
+        Assert.Equal(ApprovalStatus.PendingApproval, pending.ApprovalStatus);
+        Assert.Equal(ReserveComponentStatus.Open, pending.Status);
+        Assert.Equal(0m, pending.CurrentAmount);
+        Assert.Single(pending.History);
+
+        (await supervisor.TransitionAsync(reserve.ClaimId, ClaimStatus.Open)).EnsureSuccessStatusCode();
+        (await supervisor.TransitionAsync(reserve.ClaimId, ClaimStatus.Closed)).EnsureSuccessStatusCode();
+
+        Assert.Equal(ReserveComponentStatus.Closed, (await ListSingle()).Status);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, (await supervisor.ApproveAsync(reserve, historyId)).StatusCode);
+
+        var rejected = await supervisor.PostAsJsonAsync($"/api/claims/{reserve.ClaimId}/reserves/{reserve.Id}/reject", new { ReserveHistoryId = historyId, Reason = "Claim closed" });
+        Assert.Equal(HttpStatusCode.OK, rejected.StatusCode);
+        Assert.Equal(ApprovalStatus.Rejected, (await ListSingle()).ApprovalStatus);
+    }
 }

@@ -192,4 +192,29 @@ public class ClaimReserveComponentTests
         Assert.Throws<InvalidReserveOperationException>(() => component.SubmitChange(new Money(1000m), ApprovalTier.Auto, "handler"));
     }
 
+    /// <summary>The component's ApprovalStatus is always the status of its latest change.</summary>
+    [Fact]
+    public void ApprovalStatus_FollowsTheLatestChangeThroughSubmitApproveAndReject()
+    {
+        var component = ClaimReserveComponent.Open(Guid.NewGuid(), Guid.NewGuid(), ReserveComponentType.IndemnityReserve, new Money(5000m), ApprovalTier.Auto, "handler");
+        Assert.Equal(ApprovalStatus.AutoApproved, component.ApprovalStatus);
+
+        var pending = component.SubmitChange(new Money(50000m), ApprovalTier.Supervisor, "handler");
+        Assert.Equal(ApprovalStatus.PendingApproval, component.ApprovalStatus);
+
+        component.Reject(pending.Id, "supervisor", "Not justified", DecidedAt);
+        Assert.Equal(ApprovalStatus.Rejected, component.ApprovalStatus);
+
+        var resubmitted = component.SubmitChange(new Money(40000m), ApprovalTier.Supervisor, "handler");
+        component.Approve(resubmitted.Id, "supervisor", DecidedAt);
+        Assert.Equal(ApprovalStatus.Approved, component.ApprovalStatus);
+    }
+
+    [Fact]
+    public void Open_NewComponentIsOpen()
+    {
+        var component = ClaimReserveComponent.Open(Guid.NewGuid(), Guid.NewGuid(), ReserveComponentType.IndemnityReserve, new Money(5000m), ApprovalTier.Auto, "handler");
+
+        Assert.Equal(ReserveComponentStatus.Open, component.Status);
+    }
 }
