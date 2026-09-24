@@ -4,6 +4,8 @@ A claims-intake and reserve-management module for a P&C insurer: log a First Not
 
 Built for the DICEUS Fullstack Engineer Technical Assessment. Backend: .NET 9 / C# 13, Clean Architecture, CQRS via MediatR, EF Core 9, FluentValidation, AutoMapper, Hangfire, SQL Server. Frontend: Angular 18 (standalone components), Angular Material.
 
+**Live demo:** frontend https://purple-plant-0bef7350f.3.azurestaticapps.net · backend https://api-assess-28744.azurewebsites.net (see [§5](#5-azure-deployment)).
+
 See [`ARCHITECTURE.md`](ARCHITECTURE.md) for the solution design, data model, and the tradeoff decisions made where the two source specs disagreed. See [`AI-WORKFLOW.md`](AI-WORKFLOW.md) for how this was built.
 
 **Contents:** [1. Prerequisites](#1-prerequisites) · [2. Local development setup](#2-local-development-setup) · [3. Configuration](#3-configuration-environment-variables--appsettings) · [4. Database migrations & seed data](#4-database-migrations--seed-data) · [5. Azure deployment](#5-azure-deployment) · [6. Application walkthrough](#6-application-walkthrough) · [Running tests](#running-tests)
@@ -258,7 +260,16 @@ The App Service's app settings (the §3 keys) are `ASPNETCORE_ENVIRONMENT=Produc
 
 5. **Tear down** when finished: `az group delete --name claims-module-rg`.
 
-**Deployed URLs:** _fill in after the first deployment_. They are the `apiUrl` / `frontendUrl` outputs printed by `infra/deploy.sh`. Swagger is at `<apiUrl>/swagger` and the health check at `<apiUrl>/health`.
+**Deployed URLs:**
+
+| | URL |
+|---|---|
+| Frontend | https://purple-plant-0bef7350f.3.azurestaticapps.net |
+| Backend (API) | https://api-assess-28744.azurewebsites.net |
+| Swagger | https://api-assess-28744.azurewebsites.net/swagger |
+| Health check | https://api-assess-28744.azurewebsites.net/health |
+
+These are the `frontendUrl` / `apiUrl` outputs printed by `infra/deploy.sh`.
 
 ## 6. Application walkthrough
 
