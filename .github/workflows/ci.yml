@@ -4,16 +4,15 @@
 #          └─ frontend-tests (lint + unit)                                ─┘
 #
 # Pull requests stop after the test stages. Pushes to main — or a manual "Run workflow" — continue
-# to Azure. infra/deploy.sh provisions the resources and prints these repository settings
-# (Settings → Secrets and variables → Actions):
+# to Azure. Repository settings used (Settings → Secrets and variables → Actions):
 #   secrets:   AZURE_CREDENTIALS                service principal JSON for azure/login
-#              AZURE_SQL_CONNECTION_STRING      the Azure SQL database the API uses
+#              SQL_CONNECTION_STRING            the Azure SQL database the API uses
 #              AZURE_STATIC_WEB_APPS_API_TOKEN  deployment token of the Static Web App (frontend)
-#   variables: AZURE_RESOURCE_GROUP             resource group from infra/deploy.sh
-#              AZURE_SQL_SERVER_NAME            logical SQL server (for the temporary CI firewall rule)
-#              AZURE_WEBAPP_NAME                App Service hosting the API
-#              API_URL                          public API origin, e.g. https://claimsdemo-api-xxxx.azurewebsites.net
-#              FRONTEND_URL                     public SPA origin, e.g. https://claimsdemo-web-xxxx.azurestaticapps.net
+#   variables: RESOURCE_GROUP                   e.g. rg-assessment
+#              SQL_SERVER                       logical SQL server name (for the temporary CI firewall rule)
+#              API_APP_NAME                     App Service hosting the API
+#              API_URL                          public API origin, e.g. https://api-assess-28744.azurewebsites.net
+#              FRONTEND_URL                     public SPA origin, e.g. https://purple-plant-0bef7350f.3.azurestaticapps.net
 name: CI
 
 on:
@@ -164,7 +163,7 @@ jobs:
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
       - run: dotnet tool install --global dotnet-ef --version 9.*
-      - name: Build an idempotent EF migration bundle
+      - name: Build EF migration bundle
         run: >
           dotnet ef migrations bundle --self-contained -r linux-x64
           --project src/ClaimsModule.Persistence --startup-project src/ClaimsModule.API
@@ -177,15 +176,15 @@ jobs:
       - name: Open SQL firewall for this runner
         run: |
           ip=$(curl -s https://api.ipify.org)
-          az sql server firewall-rule create -g "${{ vars.AZURE_RESOURCE_GROUP }}" -s "${{ vars.AZURE_SQL_SERVER_NAME }}" \
+          az sql server firewall-rule create -g "${{ vars.RESOURCE_GROUP }}" -s "${{ vars.SQL_SERVER }}" \
             -n "gh-${{ github.run_id }}" --start-ip-address "$ip" --end-ip-address "$ip" --output none
       - name: Apply migrations to Azure SQL
         run: ./efbundle --connection "$CONNECTION_STRING"
         env:
-          CONNECTION_STRING: ${{ secrets.AZURE_SQL_CONNECTION_STRING }}
+          CONNECTION_STRING: ${{ secrets.SQL_CONNECTION_STRING }}
       - name: Close SQL firewall rule
         if: always()
-        run: az sql server firewall-rule delete -g "${{ vars.AZURE_RESOURCE_GROUP }}" -s "${{ vars.AZURE_SQL_SERVER_NAME }}" -n "gh-${{ github.run_id }}" || true
+        run: az sql server firewall-rule delete -g "${{ vars.RESOURCE_GROUP }}" -s "${{ vars.SQL_SERVER }}" -n "gh-${{ github.run_id }}" || true
 
   deploy:
     needs: migrate
@@ -204,11 +203,12 @@ jobs:
       - uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
-      - name: Publish and deploy the API to App Service
+      - name: Publish the API
         run: dotnet publish src/ClaimsModule.API --configuration Release --output ./api-publish
-      - uses: azure/webapps-deploy@v3
+      - name: Deploy the API to App Service
+        uses: azure/webapps-deploy@v3
         with:
-          app-name: ${{ vars.AZURE_WEBAPP_NAME }}
+          app-name: ${{ vars.API_APP_NAME }}
           package: ./api-publish
       - name: Build the SPA and point it at this environment's API
         working-directory: ${{ env.FRONTEND_DIR }}
