@@ -225,7 +225,7 @@ jobs:
           skip_app_build: true
           skip_api_build: true
 
-   smoke:
+  smoke:
     needs: deploy
     runs-on: ubuntu-latest
     environment: production
@@ -239,7 +239,7 @@ jobs:
       - run: npm ci && npx playwright install --with-deps chromium
         working-directory: ${{ env.FRONTEND_DIR }}
       - name: Smoke tests (S-01..S-05)
-        run: bash ./scripts/smoke-test.sh
+        run: ./scripts/smoke-test.sh
         env:
           API_URL: ${{ vars.API_URL }}
           FRONTEND_URL: ${{ vars.FRONTEND_URL }}
