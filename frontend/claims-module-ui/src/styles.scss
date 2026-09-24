@@ -1,0 +1,351 @@
+html, body {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+}
+
+.spacer {
+  flex: 1 1 auto;
+}
+
+:root {
+  --toolbar-bg: #2b2b2f;
+  --toolbar-text: #ffffff;
+  --toolbar-text-dim: #b9b9c0;
+  --toolbar-border: rgba(255, 255, 255, 0.08);
+  --content-bg: #ffffff;
+  --avatar-bg: #2b2b2f;
+  --avatar-text: #ffffff;
+  --accent: #4b7bec;
+}
+
+.app-toolbar.mat-toolbar {
+  background-color: var(--toolbar-bg) !important;
+  color: var(--toolbar-text) !important;
+  height: 64px;
+  padding: 0 20px;
+  display: flex;
+  align-items: center;
+  box-shadow: none;
+  border-bottom: 1px solid var(--toolbar-border);
+
+  .brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--toolbar-text);
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 15px;
+    letter-spacing: 0.2px;
+    padding: 6px 10px;
+    border-radius: 6px;
+    transition: background 0.15s ease;
+
+    &:hover {
+      background: rgba(255, 255, 255, 0.06);
+    }
+
+    .brand-mark {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      height: 28px;
+      border-radius: 8px;
+      background: var(--accent);
+      color: #fff;
+      flex-shrink: 0;
+
+      .mat-icon {
+        font-size: 17px;
+        width: 17px;
+        height: 17px;
+      }
+    }
+  }
+
+  .spacer {
+    flex: 1 1 auto;
+  }
+
+  .user-chip {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--toolbar-text-dim);
+    padding: 6px 12px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--toolbar-border);
+    margin-right: 8px;
+
+    .mat-icon {
+      font-size: 20px;
+      width: 20px;
+      height: 20px;
+      color: var(--toolbar-text-dim);
+    }
+
+    .user-chip-text {
+      display: flex;
+      flex-direction: column;
+      line-height: 1.25;
+      white-space: nowrap;
+    }
+
+    .user-chip-name {
+      color: var(--toolbar-text);
+      font-weight: 500;
+      font-size: 13px;
+    }
+
+    .user-chip-role {
+      color: var(--toolbar-text-dim);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+  }
+
+  button.mat-mdc-icon-button,
+  button[mat-icon-button] {
+    color: var(--toolbar-text-dim) !important;
+    border: 1px solid var(--toolbar-border);
+    border-radius: 8px;
+    width: 36px;
+    height: 36px;
+    line-height: 36px;
+
+    &:hover {
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--toolbar-text) !important;
+    }
+
+    .mat-icon {
+      font-size: 20px;
+    }
+  }
+}
+
+@media (max-width: 599px) {
+  .app-toolbar.mat-toolbar {
+    padding: 0 12px;
+
+    .brand-text {
+      display: none;
+    }
+
+    .user-chip-text {
+      display: none;
+    }
+
+    .user-chip {
+      padding: 6px;
+      margin-right: 4px;
+    }
+  }
+}
+
+.avatar-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: var(--avatar-bg);
+  color: var(--avatar-text);
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid var(--toolbar-border);
+}
+
+.app-content {
+  background: var(--content-bg);
+  min-height: calc(100vh - 64px);
+  padding: 24px 32px;
+  color: #1a1a1a;
+}
+
+.page-header {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+
+  .page-icon {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: #f2f2f4;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+
+    .mat-icon {
+      font-size: 24px;
+      color: #444;
+    }
+  }
+
+  h1 {
+    font-size: 26px;
+    font-weight: 700;
+    margin: 0 0 4px 0;
+    color: #111;
+  }
+
+  p {
+    margin: 0;
+    color: #6b6b73;
+    font-size: 14px;
+  }
+}
+
+@media (max-width: 599px) {
+  .app-content {
+    padding: 16px;
+  }
+
+  .page-header {
+    .page-icon {
+      width: 44px;
+      height: 44px;
+
+      .mat-icon {
+        font-size: 20px;
+      }
+    }
+
+    h1 {
+      font-size: 21px;
+    }
+
+    > .spacer {
+      flex-basis: 100%;
+      height: 0;
+    }
+
+    > button {
+      width: 100%;
+    }
+  }
+}
+
+// ==========================================================================
+// Pill-style filter bar — compact, filled Material fields instead of
+// outlined boxes, matching the rounded filter chips in the reference design.
+// ==========================================================================
+.filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+
+  .mat-mdc-text-field-wrapper {
+    background: #f2f2f4;
+    border-radius: 999px;
+  }
+
+  .mdc-notched-outline__leading,
+  .mdc-notched-outline__notch,
+  .mdc-notched-outline__trailing {
+    border-color: transparent !important;
+  }
+
+  .mat-mdc-form-field-flex {
+    min-height: 40px;
+    align-items: center;
+  }
+
+  .mat-mdc-form-field-infix {
+    min-height: 0;
+    padding-top: 8px;
+    padding-bottom: 8px;
+  }
+
+  .mat-mdc-form-field-subscript-wrapper {
+    display: none;
+  }
+
+  .clear-link {
+    color: var(--accent);
+    font-weight: 500;
+  }
+}
+// ---- Shared by several features (kept global so component stylesheets stay within budget) ----
+
+// Reserve authority tier chip: FNOL step 3 and the claim-detail reserve panel.
+.tier-indicator {
+  display: inline-flex;
+  align-items: center;
+  align-self: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 16px;
+  font-size: 13px;
+  font-weight: 600;
+
+  &.tier-auto {
+    background: #e8f5e9;
+    color: #2e7d32;
+  }
+
+  &.tier-supervisor {
+    background: #fff8e1;
+    color: #f57f17;
+  }
+
+  &.tier-manager {
+    background: #ffebee;
+    color: #c62828;
+  }
+
+  mat-icon {
+    font-size: 18px;
+    height: 18px;
+    width: 18px;
+  }
+}
+
+.table-scroll {
+  overflow-x: auto;
+  margin-bottom: 12px;
+}
+
+.plain-table {
+  width: 100%;
+  min-width: 520px;
+  border-collapse: collapse;
+
+  th,
+  td {
+    text-align: left;
+    padding: 8px 12px;
+    border-bottom: 1px solid #eceff1;
+    font-size: 14px;
+    white-space: nowrap;
+  }
+
+  th {
+    color: #607d8b;
+    font-weight: 600;
+  }
+}
+
+.plain-list {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.empty-note {
+  color: #90a4ae;
+  font-style: italic;
+}

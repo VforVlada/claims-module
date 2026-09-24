@@ -1,0 +1,9 @@
+**/bin/
+**/obj/
+**/.vs/
+**/App_Data/
+frontend/**/node_modules/
+frontend/**/dist/
+frontend/**/.angular/
+.git/
+*.log

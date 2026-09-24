@@ -1,0 +1,16 @@
+{
+  "navigationFallback": {
+    "rewrite": "/index.html",
+    "exclude": ["/*.{js,css,ico,png,svg,woff,woff2,json,map}"]
+  },
+  "routes": [
+    {
+      "route": "/config.js",
+      "headers": { "Cache-Control": "no-cache" }
+    }
+  ],
+  "globalHeaders": {
+    "X-Content-Type-Options": "nosniff",
+    "Referrer-Policy": "strict-origin-when-cross-origin"
+  }
+}

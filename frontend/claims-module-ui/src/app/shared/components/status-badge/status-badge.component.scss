@@ -1,0 +1,69 @@
+// Solid, saturated fills so each status reads at a glance and no two look alike. Every text/fill
+// pair clears WCAG AA (≥ 4.5:1) at this small bold size; the lighter fills (Draft, amber) take
+// dark text instead of white for that reason.
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  line-height: 1.4;
+  white-space: nowrap;
+
+  // Light gray — Draft: not started yet
+  &--neutral {
+    background: #cfd8dc;
+    color: #263238;
+  }
+
+  // Blue — Open
+  &--info {
+    background: #1565c0;
+    color: #fff;
+  }
+
+  // Amber — pending/attention (approval workflow)
+  &--warning {
+    background: #fbc02d;
+    color: #3e2723;
+  }
+
+  // Orange — Under Investigation. A deep burnt orange so white text still clears 4.5:1 (4.81:1);
+  // brighter oranges drop below that with white.
+  &--orange {
+    background: #bf5000;
+    color: #fff;
+  }
+
+  // Purple — Pending Payment
+  &--purple {
+    background: #6a1b9a;
+    color: #fff;
+  }
+
+  // Teal — Reopened
+  &--teal {
+    background: #00796b;
+    color: #fff;
+  }
+
+  // Brown — Withdrawn: no longer pursued
+  &--brown {
+    background: #6d4c41;
+    color: #fff;
+  }
+
+  // Green — Closed / approved / posted
+  &--success {
+    background: #2e7d32;
+    color: #fff;
+  }
+
+  // Red — rejected / failed
+  &--danger {
+    background: #c62828;
+    color: #fff;
+  }
+}

@@ -1,0 +1,44 @@
+<div class="login-page">
+  <div class="login-shell">
+    <div class="login-brand">
+      <span class="login-brand__mark"><mat-icon>shield</mat-icon></span>
+      <span class="login-brand__text">Claims Module</span>
+    </div>
+
+    <mat-card class="login-card">
+      <div class="login-card__header">
+        <h1>Welcome back</h1>
+        <p>Sign in as a role to explore the assessment build</p>
+      </div>
+
+      <div class="login-card__body">
+        @if (loadingRoles()) {
+          <div class="loading-row">
+            <span>Loading roles&hellip;</span>
+          </div>
+        } @else if (roles().length === 0) {
+          <p class="empty-state">No mock roles available. Confirm the API is running.</p>
+        } @else {
+          <div class="role-buttons">
+            @for (role of roles(); track role) {
+              <button
+                type="button"
+                class="role-button"
+                [disabled]="signingInAs() !== null"
+                (click)="signInAs(role)"
+              >
+                <span class="role-button__icon"><mat-icon>person</mat-icon></span>
+                <span class="role-button__label">
+                  {{ signingInAs() === role ? 'Signing in…' : 'Sign in as ' + roleLabel(role) }}
+                </span>
+                <mat-icon class="role-button__chevron">chevron_right</mat-icon>
+              </button>
+            }
+          </div>
+        }
+      </div>
+    </mat-card>
+
+    <p class="login-footnote">Assessment build &middot; mock authentication</p>
+  </div>
+</div>

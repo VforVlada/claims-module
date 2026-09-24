@@ -1,0 +1,25 @@
+@if (auth.isAuthenticated()) {
+  <mat-toolbar class="app-toolbar">
+    <a routerLink="/claims" class="brand">
+      <span class="brand-mark"><mat-icon>shield</mat-icon></span>
+      <span class="brand-text">Claims Module</span>
+    </a>
+    <span class="spacer"></span>
+
+    <span class="user-chip">
+      <span class="avatar-badge">{{ auth.currentUser()?.userName?.slice(0, 2)?.toUpperCase() }}</span>
+      <span class="user-chip-text">
+        <span class="user-chip-name">{{ auth.currentUser()?.userName }}</span>
+        <span class="user-chip-role">{{ auth.currentUser()?.role }}</span>
+      </span>
+    </span>
+
+    <button mat-icon-button (click)="logout()" aria-label="Sign out" title="Sign out">
+      <mat-icon>logout</mat-icon>
+    </button>
+  </mat-toolbar>
+}
+
+<main class="app-content">
+  <router-outlet></router-outlet>
+</main>

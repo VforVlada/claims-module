@@ -1,0 +1,75 @@
+services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: "${SQL_SA_PASSWORD:-YourStrong!Passw0rd}"
+    ports:
+      - "1433:1433"
+    volumes:
+      - sqlserver-data:/var/opt/mssql
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -C -Q 'SELECT 1' || exit 1"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  # One-shot: applies EF Core migrations (and seed data) against the sqlserver service, then
+  # exits. The api service waits for this to succeed before starting.
+  migrations:
+    build:
+      context: .
+      dockerfile: src/ClaimsModule.API/Dockerfile
+      target: build
+    working_dir: /src
+    command:
+      [
+        "dotnet", "ef", "database", "update",
+        "--project", "src/ClaimsModule.Persistence/ClaimsModule.Persistence.csproj",
+        "--startup-project", "src/ClaimsModule.API/ClaimsModule.API.csproj"
+      ]
+    environment:
+      ConnectionStrings__ClaimsDatabase: "Server=sqlserver;Database=ClaimsModule;User Id=sa;Password=${SQL_SA_PASSWORD:-YourStrong!Passw0rd};TrustServerCertificate=True"
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+
+  api:
+    build:
+      context: .
+      dockerfile: src/ClaimsModule.API/Dockerfile
+    ports:
+      - "5299:5299"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__ClaimsDatabase: "Server=sqlserver;Database=ClaimsModule;User Id=sa;Password=${SQL_SA_PASSWORD:-YourStrong!Passw0rd};TrustServerCertificate=True"
+      Jwt__Issuer: ClaimsModule
+      Jwt__Audience: ClaimsModule.Client
+      Jwt__SigningKey: "${JWT_SIGNING_KEY:-docker-dev-only-signing-key-change-me-0123456789}"
+      Jwt__ExpiryMinutes: "480"
+      Storage__Provider: LocalFileSystem
+      Storage__LocalFileSystemRootPath: App_Data/claim-documents
+      Storage__LocalFileSystemPublicBaseUrl: /api/claims/local-documents
+      Storage__LocalFileSystemSigningSecret: "${STORAGE_SIGNING_SECRET:-docker-dev-only-signing-secret-change-me}"
+    volumes:
+      - api-documents:/app/App_Data
+    depends_on:
+      migrations:
+        condition: service_completed_successfully
+
+  frontend:
+    build:
+      context: frontend/claims-module-ui
+    ports:
+      - "4200:80"
+    depends_on:
+      - api
+
+volumes:
+  sqlserver-data:
+  api-documents:

@@ -1,0 +1,188 @@
+h1 {
+  margin-bottom: 16px;
+}
+
+.fnol-stepper {
+  background: transparent;
+}
+
+.step-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px 4px;
+  max-width: 900px;
+}
+
+.full-width {
+  width: 100%;
+}
+
+.policy-search {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+
+  .full-width {
+    flex: 1 1 220px;
+    min-width: 0;
+  }
+}
+
+.policy-badge {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border-radius: 16px;
+  font-size: 13px;
+  white-space: nowrap;
+
+  &.in-force {
+    background: #e8f5e9;
+    color: #2e7d32;
+  }
+
+  &.not-in-force {
+    background: #ffebee;
+    color: #c62828;
+  }
+
+  mat-icon {
+    font-size: 18px;
+    height: 18px;
+    width: 18px;
+  }
+}
+
+.in-force {
+  color: #2e7d32;
+}
+
+.not-in-force {
+  color: #c62828;
+}
+
+.inline-warning {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: #fff8e1;
+  color: #f57f17;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.party-row,
+.risk-object-row {
+  display: grid;
+  gap: 12px;
+  align-items: start;
+
+  .mat-mdc-form-field {
+    width: 100%;
+  }
+
+  button {
+    margin-top: 4px;
+  }
+}
+
+.party-row {
+  grid-template-columns: 130px 150px 1fr 1fr 140px auto;
+}
+
+.risk-object-row {
+  grid-template-columns: 160px 1fr 220px auto;
+}
+
+.party-list,
+.risk-object-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+@media (max-width: 860px) {
+  .party-row,
+  .risk-object-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+.risk-object-chips {
+  margin-bottom: 8px;
+}
+
+.reserve-fields {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.review-summary {
+  background: #f5f6fa;
+  padding: 16px;
+  border-radius: 4px;
+
+  p {
+    margin: 4px 0;
+  }
+}
+
+.step-actions {
+  display: flex;
+  gap: 12px;
+  padding-top: 8px;
+}
+
+.submit-banner {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 14px 16px;
+  margin-bottom: 12px;
+  background: #e8f5e9;
+  color: #2e7d32;
+  border-radius: 4px;
+}
+
+.submit-warning {
+  margin-bottom: 8px;
+}
+
+// Brief §3.3.2: the picked policy's coverage types, limits and deductibles.
+.policy-coverages {
+  margin: 4px 0 8px;
+
+  h4 {
+    margin: 0 0 6px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #455a64;
+  }
+}
+
+.coverage-table {
+  border-collapse: collapse;
+  font-size: 13px;
+
+  th,
+  td {
+    text-align: left;
+    padding: 4px 16px 4px 0;
+  }
+
+  th {
+    color: #607d8b;
+    font-weight: 600;
+  }
+
+  td:not(:first-child) {
+    font-variant-numeric: tabular-nums;
+  }
+}

@@ -1,0 +1,253 @@
+# Testing plan section 8 / brief §3.8: every test layer gates the release.
+#
+#   build ─┬─ backend-tests (unit + architecture + integration, coverage) ─┬─ e2e (docker compose) ─ migrate ─ deploy ─ smoke
+#          └─ frontend-tests (lint + unit)                                ─┘
+#
+# Pull requests stop after the test stages. Pushes to main — or a manual "Run workflow" — continue
+# to Azure. infra/deploy.sh provisions the resources and prints these repository settings
+# (Settings → Secrets and variables → Actions):
+#   secrets:   AZURE_CREDENTIALS                service principal JSON for azure/login
+#              AZURE_SQL_CONNECTION_STRING      the Azure SQL database the API uses
+#              AZURE_STATIC_WEB_APPS_API_TOKEN  deployment token of the Static Web App (frontend)
+#   variables: AZURE_RESOURCE_GROUP             resource group from infra/deploy.sh
+#              AZURE_SQL_SERVER_NAME            logical SQL server (for the temporary CI firewall rule)
+#              AZURE_WEBAPP_NAME                App Service hosting the API
+#              API_URL                          public API origin, e.g. https://claimsdemo-api-xxxx.azurewebsites.net
+#              FRONTEND_URL                     public SPA origin, e.g. https://claimsdemo-web-xxxx.azurestaticapps.net
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  DOTNET_VERSION: "9.0.x"
+  NODE_VERSION: "20"
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  FRONTEND_DIR: frontend/claims-module-ui
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: ${{ env.FRONTEND_DIR }}/package-lock.json
+      - run: dotnet build ClaimsModule.sln --configuration Release
+      - run: npm ci
+        working-directory: ${{ env.FRONTEND_DIR }}
+      - run: npx ng build
+        working-directory: ${{ env.FRONTEND_DIR }}
+
+  backend-tests:
+    needs: build
+    runs-on: ubuntu-latest # Docker is available here, so Testcontainers (SQL Server + Azurite) just works.
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+      - run: dotnet tool restore
+      - name: Unit, architecture and integration tests
+        run: >
+          dotnet test ClaimsModule.sln --configuration Release
+          --collect:"XPlat Code Coverage" --results-directory ./coverage
+          --logger "trx;LogFilePrefix=results"
+      - name: Coverage report (Domain + Application, where the business rules live)
+        if: always()
+        run: >
+          dotnet reportgenerator -reports:"coverage/**/coverage.cobertura.xml" -targetdir:coverage/report
+          -reporttypes:"Cobertura;MarkdownSummaryGithub;HtmlInline"
+          -assemblyfilters:"+ClaimsModule.Domain;+ClaimsModule.Application"
+      - name: Enforce ~90% line coverage on Domain + Application
+        run: |
+          rate=$(grep -o 'line-rate="[0-9.]*"' coverage/report/Cobertura.xml | head -1 | grep -o '[0-9.]*')
+          pct=$(awk "BEGIN { printf \"%.1f\", $rate * 100 }")
+          echo "Domain + Application line coverage: ${pct}%"
+          awk "BEGIN { exit !($rate >= 0.90) }" || { echo "::error::Coverage ${pct}% is below the 90% target"; exit 1; }
+      - if: always()
+        run: cat coverage/report/SummaryGithub.md >> "$GITHUB_STEP_SUMMARY"
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-test-results
+          path: |
+            coverage/report
+            **/TestResults/*.trx
+
+  frontend-tests:
+    needs: build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ env.FRONTEND_DIR }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: ${{ env.FRONTEND_DIR }}/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run test:ci
+      - run: npm run e2e:typecheck
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-coverage
+          path: ${{ env.FRONTEND_DIR }}/coverage
+
+  # The full Playwright suite (E2E-01..07) against the real stack — SQL Server, migrations, API
+  # with Hangfire, nginx-served SPA — brought up from docker-compose.yml on the runner. Runs on
+  # pull requests too; deployment is gated on it.
+  e2e:
+    needs: [backend-tests, frontend-tests]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: ${{ env.FRONTEND_DIR }}/package-lock.json
+      - name: Start the stack (docker compose)
+        run: docker compose up --build --detach
+      - name: Wait for the API and the SPA
+        run: |
+          for i in $(seq 1 60); do
+            api=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:5299/health || true)
+            ui=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:4200 || true)
+            [ "$api" = 200 ] && [ "$ui" = 200 ] && exit 0
+            sleep 5
+          done
+          echo "::error::Stack did not become healthy (api=$api ui=$ui)"; exit 1
+      - run: npm ci && npx playwright install --with-deps chromium
+        working-directory: ${{ env.FRONTEND_DIR }}
+      - name: Playwright E2E
+        run: npm run e2e
+        working-directory: ${{ env.FRONTEND_DIR }}
+        env:
+          CI: "true"
+      - if: failure()
+        run: docker compose logs api migrations --tail 200
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-playwright-report
+          path: ${{ env.FRONTEND_DIR }}/e2e/playwright-report
+      - if: always()
+        run: docker compose down --volumes
+
+  migrate:
+    needs: [backend-tests, frontend-tests, e2e]
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+      - run: dotnet tool install --global dotnet-ef --version 9.*
+      - name: Build an idempotent EF migration bundle
+        run: >
+          dotnet ef migrations bundle --idempotent --self-contained -r linux-x64
+          --project src/ClaimsModule.Persistence --startup-project src/ClaimsModule.API
+          --output ./efbundle
+      - uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+      # Azure SQL only admits Azure services by default; open a rule for this runner's IP for the
+      # duration of the migration, and always close it again.
+      - name: Open SQL firewall for this runner
+        run: |
+          ip=$(curl -s https://api.ipify.org)
+          az sql server firewall-rule create -g "${{ vars.AZURE_RESOURCE_GROUP }}" -s "${{ vars.AZURE_SQL_SERVER_NAME }}" \
+            -n "gh-${{ github.run_id }}" --start-ip-address "$ip" --end-ip-address "$ip" --output none
+      - name: Apply migrations to Azure SQL
+        run: ./efbundle --connection "$CONNECTION_STRING"
+        env:
+          CONNECTION_STRING: ${{ secrets.AZURE_SQL_CONNECTION_STRING }}
+      - name: Close SQL firewall rule
+        if: always()
+        run: az sql server firewall-rule delete -g "${{ vars.AZURE_RESOURCE_GROUP }}" -s "${{ vars.AZURE_SQL_SERVER_NAME }}" -n "gh-${{ github.run_id }}" || true
+
+  deploy:
+    needs: migrate
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: ${{ env.FRONTEND_DIR }}/package-lock.json
+      - uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+      - name: Publish and deploy the API to App Service
+        run: dotnet publish src/ClaimsModule.API --configuration Release --output ./api-publish
+      - uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ vars.AZURE_WEBAPP_NAME }}
+          package: ./api-publish
+      - name: Build the SPA and point it at this environment's API
+        working-directory: ${{ env.FRONTEND_DIR }}
+        run: |
+          npm ci
+          npx ng build
+          printf "window.__CLAIMS_CONFIG__ = { apiOrigin: '%s' };\n" "${{ vars.API_URL }}" > dist/claims-module-ui/browser/config.js
+      - name: Deploy the SPA to Azure Static Web Apps
+        uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
+          action: upload
+          app_location: ${{ env.FRONTEND_DIR }}/dist/claims-module-ui/browser
+          skip_app_build: true
+          skip_api_build: true
+
+  smoke:
+    needs: deploy
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: ${{ env.FRONTEND_DIR }}/package-lock.json
+      - run: npm ci && npx playwright install --with-deps chromium
+        working-directory: ${{ env.FRONTEND_DIR }}
+      - name: Smoke tests (S-01..S-05)
+        run: ./scripts/smoke-test.sh
+        env:
+          API_URL: ${{ vars.API_URL }}
+          FRONTEND_URL: ${{ vars.FRONTEND_URL }}
+          CI: "true"
+      - if: failure()
+        run: echo "::error::Smoke tests failed against ${{ vars.API_URL }} — this release is flagged; investigate before promoting further."
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-playwright-report
+          path: ${{ env.FRONTEND_DIR }}/e2e/playwright-report

@@ -1,0 +1,94 @@
+// Icon, h1 and p come from the global .page-header design system — this
+// just adds the trailing action button to that flex row.
+.page-header {
+  &__text {
+    flex: 1;
+  }
+}
+
+.filters {
+  margin-bottom: 20px;
+
+  .filter-status,
+  .filter-cause {
+    min-width: 190px;
+  }
+}
+
+.table-card {
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  border: 1px solid #ececef;
+  overflow-x: auto;
+}
+
+.claims-table {
+  width: 100%;
+  min-width: 720px;
+
+  th.mat-mdc-header-cell {
+    color: #6b6b73;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    border-bottom-color: #ececef;
+  }
+
+  td.mat-mdc-cell {
+    border-bottom-color: #f2f2f4;
+  }
+
+  .row-action {
+    width: 40px;
+    color: #b3b3b8;
+    text-align: right;
+  }
+}
+
+.claim-row {
+  cursor: pointer;
+
+  &:hover {
+    background: #fafafb;
+  }
+}
+
+.loading-state,
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 64px 16px;
+  color: #607d8b;
+
+  mat-icon {
+    font-size: 48px;
+    height: 48px;
+    width: 48px;
+  }
+}
+
+.status-cell {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+// Primary call to action: filled in the brand colour (M3's raised button is a pale surface that
+// blends into the header), slightly larger, with a soft shadow so it stands out.
+.new-claim-button {
+  height: 44px;
+  padding: 0 22px;
+  font-size: 15px;
+  font-weight: 600;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.18);
+
+  &:hover {
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.24);
+  }
+}

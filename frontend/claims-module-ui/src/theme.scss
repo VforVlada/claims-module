@@ -1,0 +1,29 @@
+@use '@angular/material' as mat;
+@use './theme-colors' as colors;
+
+// Include common core styles
+@include mat.core();
+
+// M3 theme built on the custom Claims Module palettes (src/_theme-colors.scss, brief §3.7.4)
+// instead of a built-in palette such as mat.$azure-palette.
+$apple-theme: mat.define-theme((
+  color: (
+    theme-type: light,
+    primary: colors.$primary-palette,
+    tertiary: colors.$tertiary-palette,
+  ),
+  typography: (
+    plain-family: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif"
+  ),
+  density: (
+    scale: 0 // Corrected: density expects a configuration object with a scale property
+  )
+));
+
+// Apply the theme map globally across all components
+html {
+  @include mat.all-component-themes($apple-theme);
+
+  background-color: #f5f5f7;
+  color: #1d1d1f;
+}

@@ -1,0 +1,394 @@
+@if (loading()) {
+  <div class="loading-state">
+    <mat-spinner diameter="36"></mat-spinner>
+  </div>
+} @else {
+@if (claim(); as c) {
+  <div class="page-container">
+    <button mat-button (click)="goBack()" class="back-link">
+      <mat-icon>arrow_back</mat-icon>
+      Back to Claims
+    </button>
+
+    <div class="claim-header">
+      <div class="claim-header__main">
+        <h1>{{ c.claimNumber }}</h1>
+        <app-status-badge [label]="statusBadge(c.status).label" [color]="statusBadge(c.status).color"></app-status-badge>
+        @if (c.isSlaBreached) {
+          <app-sla-badge [breachedAt]="c.slaBreachedAt"></app-sla-badge>
+        }
+        @if (c.requiresManagerOverride) {
+          <span class="manager-override-flag" title="Aggregate reserves exceed $10M and require manager override">
+            <mat-icon>flag</mat-icon>
+            Manager override required
+          </span>
+        }
+      </div>
+      <div class="claim-header__meta">
+        <span>{{ c.policyNumber || 'Unknown policy' }} @if (c.clientName) { &middot; {{ c.clientName }} }</span>
+        <span>Loss: {{ c.lossEvent.lossDate | date: 'mediumDate' }} &middot; {{ c.lossEvent.causeOfLossDescription || c.lossEvent.causeOfLossCode }}</span>
+        <span>Handler: {{ c.assignedHandler }}</span>
+      </div>
+
+      @if (allowedNextStatuses().length > 0) {
+        <button mat-raised-button color="primary" [matMenuTriggerFor]="statusMenu">
+          Transition Status
+          <mat-icon>arrow_drop_down</mat-icon>
+        </button>
+        <mat-menu #statusMenu="matMenu">
+          @for (status of allowedNextStatuses(); track status) {
+            <button mat-menu-item (click)="transitionTo(status)">{{ claimStatusLabels[status] }}</button>
+          }
+        </mat-menu>
+      }
+    </div>
+
+    <mat-tab-group class="claim-tabs" animationDuration="0ms" [(selectedIndex)]="selectedTabIndex">
+      <mat-tab label="Overview">
+        <div class="tab-content overview-grid">
+          <section class="section-card">
+            <h3>Loss Details</h3>
+            <p><strong>Claim Type:</strong> {{ claimTypeLabels[c.claimType] }}</p>
+            <p><strong>Loss Date:</strong> {{ c.lossEvent.lossDate | date: 'medium' }}</p>
+            <p><strong>Location:</strong> {{ c.lossEvent.location }}</p>
+            <p><strong>Cause of Loss:</strong> {{ c.lossEvent.causeOfLossDescription || c.lossEvent.causeOfLossCode }}</p>
+            <p><strong>Description:</strong> {{ c.lossEvent.description }}</p>
+            <p><strong>Created:</strong> {{ c.createdAt | date: 'medium' }}</p>
+          </section>
+
+          <section class="section-card">
+            <h3>Risk Objects</h3>
+            @if (c.riskObjects.length === 0) {
+              <p class="empty-note">No risk objects recorded.</p>
+            } @else {
+              <ul class="plain-list">
+                @for (ro of c.riskObjects; track ro.id) {
+                  <li>{{ ro.description }} @if (ro.identifier) { ({{ ro.identifier }}) }</li>
+                }
+              </ul>
+            }
+          </section>
+        </div>
+      </mat-tab>
+
+      <mat-tab label="Parties">
+        <div class="tab-content">
+          <div class="tab-header">
+            <h3>Parties</h3>
+            <button mat-stroked-button (click)="toggleAddParty()">
+              <mat-icon>add</mat-icon>
+              Add Party
+            </button>
+          </div>
+
+          @if (addingParty()) {
+            <form [formGroup]="partyForm" class="inline-form">
+              <mat-form-field appearance="outline">
+                <mat-label>Type</mat-label>
+                <mat-select formControlName="partyType">
+                  @for (type of partyTypes; track type) {
+                    <mat-option [value]="type">{{ partyTypeLabels[type] }}</mat-option>
+                  }
+                </mat-select>
+              </mat-form-field>
+              <mat-form-field appearance="outline">
+                <mat-label>Role</mat-label>
+                <mat-select formControlName="partyRole">
+                  @for (role of partyRoles; track role) {
+                    <mat-option [value]="role">{{ partyRoleLabels[role] }}</mat-option>
+                  }
+                </mat-select>
+              </mat-form-field>
+              <mat-form-field appearance="outline">
+                <mat-label>Name</mat-label>
+                <input matInput formControlName="name" required [maxlength]="limits.partyName" />
+              </mat-form-field>
+              <mat-form-field appearance="outline">
+                <mat-label>Email</mat-label>
+                <input matInput type="email" formControlName="contactEmail" [maxlength]="limits.email" />
+                <mat-error>{{ partyEmailError() }}</mat-error>
+              </mat-form-field>
+              <mat-form-field appearance="outline">
+                <mat-label>Phone</mat-label>
+                <input matInput appPhoneInput formControlName="contactPhone" />
+              </mat-form-field>
+              <button mat-raised-button color="primary" (click)="submitParty()" [disabled]="partyForm.invalid">Save</button>
+            </form>
+          }
+
+          <div class="table-scroll">
+            <table class="plain-table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Type</th>
+                  <th>Role</th>
+                  <th>Email</th>
+                  <th>Phone</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (party of c.parties; track party.id) {
+                  <tr>
+                    <td>{{ party.name }}</td>
+                    <td>{{ partyTypeLabels[party.partyType] }}</td>
+                    <td>{{ partyRoleLabels[party.partyRole] }}</td>
+                    <td>{{ party.contactEmail || '—' }}</td>
+                    <td>{{ party.contactPhone || '—' }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </mat-tab>
+
+      <mat-tab label="Reserves">
+        <div class="tab-content">
+          <div class="tab-header">
+            <h3>Reserves</h3>
+            <button mat-stroked-button (click)="openNewReservePanel()">
+              <mat-icon>add</mat-icon>
+              Open New Reserve
+            </button>
+          </div>
+
+          @if (showReservePanel()) {
+            <mat-card class="reserve-panel">
+              <mat-card-content>
+                @if (adjustingComponent(); as adjusting) {
+                  <p class="adjust-summary">
+                    Adjusting <strong>{{ reserveComponentTypeLabels[adjusting.componentType] }}</strong> &middot;
+                    current total {{ adjusting.currentAmount | currency: adjusting.currency }}. Enter the new total, not the difference.
+                  </p>
+                }
+                <form [formGroup]="reserveForm" class="inline-form">
+                  @if (reservePanelMode() === 'open') {
+                    <mat-form-field appearance="outline">
+                      <mat-label>Component Type</mat-label>
+                      <mat-select formControlName="componentType">
+                        @for (type of reserveComponentTypes; track type) {
+                          <mat-option [value]="type">{{ reserveComponentTypeLabels[type] }}</mat-option>
+                        }
+                      </mat-select>
+                    </mat-form-field>
+                  }
+                  <mat-form-field appearance="outline">
+                    <mat-label>{{ amountLabel }}</mat-label>
+                    <input matInput type="number" formControlName="amount" />
+                    @if (reserveForm.get('componentType')!.value === recoveryReserve) {
+                      <mat-hint>Recovery reserves are negative</mat-hint>
+                    }
+                    <mat-error>{{ amountError() }}</mat-error>
+                  </mat-form-field>
+                  <mat-form-field appearance="outline">
+                    <mat-label>Currency</mat-label>
+                    <input matInput appCurrencyInput formControlName="currency" />
+                    <mat-error>{{ currencyError() }}</mat-error>
+                  </mat-form-field>
+                  <mat-form-field appearance="outline" class="reason-field">
+                    <mat-label>{{ reservePanelMode() === 'adjust' ? 'Reason for change' : 'Reason (optional)' }}</mat-label>
+                    <textarea matInput #reasonInput formControlName="reason" rows="2" [maxlength]="limits.reason" [required]="reservePanelMode() === 'adjust'"></textarea>
+                    <mat-hint align="end">{{ reasonInput.value.length }} / {{ limits.reason }}</mat-hint>
+                    <mat-error>{{ reasonError() }}</mat-error>
+                  </mat-form-field>
+
+                  @if (reserveTierPreview) {
+                    <span class="tier-indicator" [class]="'tier-' + reserveTierPreview.toLowerCase()">
+                      Requires {{ reserveTierPreview }} approval
+                    </span>
+                  }
+
+                  <button mat-raised-button color="primary" (click)="submitReserve()" [disabled]="reserveForm.invalid">Submit</button>
+                  <button mat-button (click)="closeReservePanel()">Cancel</button>
+                </form>
+              </mat-card-content>
+            </mat-card>
+          }
+
+          @if (c.reserveComponents.length === 0) {
+            <p class="empty-note">No reserves opened yet.</p>
+          } @else {
+            <div class="reserve-cards">
+              @for (component of c.reserveComponents; track component.id) {
+                <mat-card class="reserve-card">
+                  <mat-card-header>
+                    <mat-card-title>{{ reserveComponentTypeLabels[component.componentType] }}</mat-card-title>
+                    <mat-card-subtitle>{{ component.currentAmount | currency: component.currency }}</mat-card-subtitle>
+                  </mat-card-header>
+                  <mat-card-content>
+                    <div class="table-scroll">
+                      <table class="plain-table">
+                        <thead>
+                          <tr>
+                            <th>#</th>
+                            <th>Previous → New</th>
+                            <th>Change</th>
+                            <th>Reason</th>
+                            <th>Status</th>
+                            <th>GL Posting</th>
+                            <th>Changed By</th>
+                            <th>Decided By</th>
+                            <th></th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          @for (history of historyNewestFirst(component); track history.id) {
+                            <tr>
+                              <td>{{ history.changeSequence }}</td>
+                              <td class="history-amounts">
+                                <span class="history-previous">{{ history.previousAmount | currency: history.currency }}</span>
+                                <span aria-label="to"> → </span>
+                                <span class="history-new">{{ history.newAmount | currency: history.currency }}</span>
+                              </td>
+                              <td class="history-change" [class.history-change--negative]="history.amount < 0">{{ signedChange(history) }}</td>
+                              <td class="history-reason">{{ history.changeReason || '—' }}</td>
+                              <td>
+                                <app-status-badge [label]="approvalBadge(history.approvalStatus).label" [color]="approvalBadge(history.approvalStatus).color"></app-status-badge>
+                              </td>
+                              <td>
+                                <app-status-badge [label]="postingBadge(history.postingStatus).label" [color]="postingBadge(history.postingStatus).color"></app-status-badge>
+                              </td>
+                              <td>{{ history.requestedBy }}</td>
+                              <td>{{ history.decidedBy || '—' }}</td>
+                              <td>
+                                @if (canDecide(history)) {
+                                  @if (isOwnRequest(history)) {
+                                    <span class="own-request-note">Awaiting approval by another {{ history.requiredTier === ApprovalTier.Manager ? 'Manager' : 'Supervisor or Manager' }}</span>
+                                  } @else {
+                                    <button mat-icon-button class="decision-approve" (click)="approveReserve(component, history)" title="Approve" aria-label="Approve">
+                                      <mat-icon>check_circle</mat-icon>
+                                    </button>
+                                  }
+                                  <button mat-icon-button class="decision-reject" (click)="rejectReserve(component, history)" title="Reject" aria-label="Reject">
+                                    <mat-icon>cancel</mat-icon>
+                                  </button>
+                                }
+                              </td>
+                            </tr>
+                          }
+                        </tbody>
+                      </table>
+                    </div>
+                    <button mat-button (click)="openAdjustReservePanel(component)" [disabled]="hasPendingChange(component)">
+                      <mat-icon>edit</mat-icon>
+                      Adjust
+                    </button>
+                    @if (hasPendingChange(component)) {
+                      <p class="adjust-blocked-note">A change is awaiting approval — it must be approved or rejected before this reserve can be adjusted again.</p>
+                    }
+                  </mat-card-content>
+                </mat-card>
+              }
+            </div>
+          }
+        </div>
+      </mat-tab>
+
+      <mat-tab label="Documents">
+        <div class="tab-content">
+          <div class="tab-header">
+            <h3>Documents</h3>
+            <div class="upload-controls">
+              <mat-form-field appearance="outline" class="document-type-field" subscriptSizing="dynamic">
+                <mat-label>Document type</mat-label>
+                <mat-select [formControl]="documentTypeControl">
+                  @for (type of documentTypes; track type) {
+                    <mat-option [value]="type">{{ documentTypeLabels[type] }}</mat-option>
+                  }
+                </mat-select>
+              </mat-form-field>
+              <button mat-stroked-button (click)="fileInput.click()">
+                <mat-icon>upload</mat-icon>
+                Upload Document
+              </button>
+            </div>
+            <input #fileInput type="file" hidden (change)="onFileSelected($event)" />
+          </div>
+
+          @if (uploadProgress(); as progress) {
+            <mat-progress-bar mode="determinate" [value]="progress"></mat-progress-bar>
+          }
+
+          @if (documents().length === 0) {
+            <p class="empty-note">No documents uploaded yet.</p>
+          } @else {
+            <div class="table-scroll">
+              <table class="plain-table">
+                <thead>
+                  <tr>
+                    <th>File</th>
+                    <th>Type</th>
+                    <th>Size</th>
+                    <th>Uploaded By</th>
+                    <th>Date</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (doc of documents(); track doc.id) {
+                    <tr>
+                      <td>{{ doc.fileName }}</td>
+                      <td>{{ documentTypeLabel(doc.documentType) }}</td>
+                      <td>{{ formatSize(doc.sizeBytes) }}</td>
+                      <td>{{ doc.uploadedBy }}</td>
+                      <td>{{ doc.createdAt | date: 'medium' }}</td>
+                      <td>
+                        <a mat-icon-button [href]="documentUrl(doc.downloadUrl)" target="_blank" rel="noopener" title="Download" [attr.aria-label]="'Download ' + doc.fileName">
+                          <mat-icon>download</mat-icon>
+                        </a>
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          }
+        </div>
+      </mat-tab>
+
+      <mat-tab label="Audit Log">
+        <div class="tab-content">
+          @if (auditLoading()) {
+            <div class="loading-state"><mat-spinner diameter="28"></mat-spinner></div>
+          } @else if (auditEntries().length === 0) {
+            <p class="empty-note">No audit entries yet.</p>
+          } @else {
+            <div class="table-scroll">
+              <table class="plain-table">
+                <thead>
+                  <tr>
+                    <th>Action</th>
+                    <th>Details</th>
+                    <th>Performed By</th>
+                    <th>When</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (entry of auditEntries(); track entry.id) {
+                    <tr>
+                      <td>{{ entry.action }}</td>
+                      <td>{{ entry.newValues || '—' }}</td>
+                      <td>{{ entry.performedBy }}</td>
+                      <td>{{ entry.createdAt | date: 'medium' }}</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+            @if (auditTotalCount() > 20) {
+              <mat-paginator
+                [length]="auditTotalCount()"
+                [pageSize]="auditPageSize()"
+                [pageIndex]="auditPageNumber() - 1"
+                [pageSizeOptions]="[20, 50]"
+                (page)="onAuditPage($event)"
+              ></mat-paginator>
+            }
+          }
+        </div>
+      </mat-tab>
+    </mat-tab-group>
+  </div>
+}
+}

@@ -1,0 +1,132 @@
+<div class="page-container">
+  <div class="page-header">
+    <div class="page-icon"><mat-icon>folder_open</mat-icon></div>
+    <div class="page-header__text">
+      <h1>Claims</h1>
+      <p>Every claim in one place — filter, review, and manage reserves.</p>
+    </div>
+    <span class="spacer"></span>
+    <button mat-flat-button class="new-claim-button" (click)="newClaim()">
+      <mat-icon>add</mat-icon>
+      Log New Claim
+    </button>
+  </div>
+
+  <div class="filters filter-bar">
+    <mat-form-field appearance="outline" class="filter-status">
+      <mat-label>Status</mat-label>
+      <mat-select [(ngModel)]="selectedStatuses" multiple (selectionChange)="applyFilters()">
+        @for (status of statusOptions; track status) {
+          <mat-option [value]="status">{{ statusLabels[status] }}</mat-option>
+        }
+      </mat-select>
+    </mat-form-field>
+
+    <mat-form-field appearance="outline">
+      <mat-label>From</mat-label>
+      <input matInput [matDatepicker]="fromPicker" [(ngModel)]="fromDate" (dateChange)="applyFilters()" />
+      <mat-datepicker-toggle matIconSuffix [for]="fromPicker"></mat-datepicker-toggle>
+      <mat-datepicker #fromPicker></mat-datepicker>
+    </mat-form-field>
+
+    <mat-form-field appearance="outline">
+      <mat-label>To</mat-label>
+      <input matInput [matDatepicker]="toPicker" [(ngModel)]="toDate" (dateChange)="applyFilters()" />
+      <mat-datepicker-toggle matIconSuffix [for]="toPicker"></mat-datepicker-toggle>
+      <mat-datepicker #toPicker></mat-datepicker>
+    </mat-form-field>
+
+    <mat-form-field appearance="outline">
+      <mat-label>Assigned handler</mat-label>
+      <input matInput [(ngModel)]="assignedHandler" (ngModelChange)="onHandlerFilterChange($event)" placeholder="Search by handler" [maxlength]="limits.assignedHandler" />
+    </mat-form-field>
+
+    <mat-form-field appearance="outline" class="filter-cause">
+      <mat-label>Cause of loss</mat-label>
+      <mat-select [(ngModel)]="causeOfLossCodeId" (selectionChange)="applyFilters()">
+        <mat-option value="">Any</mat-option>
+        @for (code of causeOfLossCodes(); track code.id) {
+          <mat-option [value]="code.id">{{ code.description }}</mat-option>
+        }
+      </mat-select>
+    </mat-form-field>
+
+    <button mat-button class="clear-link" (click)="clearFilters()">Clear</button>
+  </div>
+
+  <div class="table-card">
+    @if (loading()) {
+      <div class="loading-state">
+        <mat-spinner diameter="36"></mat-spinner>
+        <span>Loading claims&hellip;</span>
+      </div>
+    } @else if (claims().length === 0) {
+      <div class="empty-state">
+        <mat-icon>inbox</mat-icon>
+        <p>No claims match these filters.</p>
+      </div>
+    } @else {
+      <table mat-table [dataSource]="claims()" class="claims-table">
+        <ng-container matColumnDef="claimNumber">
+          <th mat-header-cell *matHeaderCellDef>Claim Number</th>
+          <td mat-cell *matCellDef="let claim">{{ claim.claimNumber }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="policyNumber">
+          <th mat-header-cell *matHeaderCellDef>Policy Number</th>
+          <td mat-cell *matCellDef="let claim">{{ claim.policyNumber || '—' }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="clientName">
+          <th mat-header-cell *matHeaderCellDef>Client Name</th>
+          <td mat-cell *matCellDef="let claim">{{ claim.clientName || '—' }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="lossDate">
+          <th mat-header-cell *matHeaderCellDef>Loss Date</th>
+          <td mat-cell *matCellDef="let claim">{{ claim.lossDate | date: 'mediumDate' }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="causeOfLoss">
+          <th mat-header-cell *matHeaderCellDef>Cause of Loss</th>
+          <td mat-cell *matCellDef="let claim">{{ claim.causeOfLossCode }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="status">
+          <th mat-header-cell *matHeaderCellDef>Status</th>
+          <td mat-cell *matCellDef="let claim">
+            <div class="status-cell">
+              <app-status-badge [label]="badgeFor(claim.status).label" [color]="badgeFor(claim.status).color"></app-status-badge>
+              @if (claim.isSlaBreached) {
+                <app-sla-badge [breachedAt]="claim.slaBreachedAt"></app-sla-badge>
+              }
+            </div>
+          </td>
+        </ng-container>
+
+        <ng-container matColumnDef="totalReserve">
+          <th mat-header-cell *matHeaderCellDef>Total Reserve</th>
+          <td mat-cell *matCellDef="let claim">{{ claim.totalReserve | currency: claim.currency }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="actions">
+          <th mat-header-cell *matHeaderCellDef></th>
+          <td mat-cell *matCellDef="let claim" class="row-action">
+            <mat-icon>chevron_right</mat-icon>
+          </td>
+        </ng-container>
+
+        <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+        <tr mat-row *matRowDef="let claim; columns: displayedColumns" class="claim-row" (click)="openClaim(claim)"></tr>
+      </table>
+
+      <mat-paginator
+        [length]="totalCount()"
+        [pageSize]="pageSize()"
+        [pageSizeOptions]="[10, 20, 50]"
+        [pageIndex]="pageNumber() - 1"
+        (page)="onPage($event)"
+      ></mat-paginator>
+    }
+  </div>
+</div>

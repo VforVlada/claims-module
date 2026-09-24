@@ -1,0 +1,18 @@
+using ClaimsModule.Domain.Enums;
+
+namespace ClaimsModule.Application.Reserves.Dtos;
+
+public sealed class ReserveComponentDto
+{
+    public Guid Id { get; init; }
+
+    public Guid ClaimId { get; init; }
+
+    public ReserveComponentType ComponentType { get; init; }
+
+    public decimal CurrentAmount { get; init; }
+
+    public string Currency { get; init; } = "USD";
+
+    public IReadOnlyCollection<ReserveHistoryDto> History { get; init; } = [];
+}
