@@ -166,7 +166,7 @@ jobs:
       - run: dotnet tool install --global dotnet-ef --version 9.*
       - name: Build an idempotent EF migration bundle
         run: >
-          dotnet ef migrations bundle --idempotent --self-contained -r linux-x64
+          dotnet ef migrations bundle --self-contained -r linux-x64
           --project src/ClaimsModule.Persistence --startup-project src/ClaimsModule.API
           --output ./efbundle
       - uses: azure/login@v2
