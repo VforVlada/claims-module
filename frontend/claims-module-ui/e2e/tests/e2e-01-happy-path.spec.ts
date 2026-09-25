@@ -15,8 +15,14 @@ test('E2E-01 handler creates a claim with a 5,000 reserve via FNOL; auto-approve
   let step = activeStep(page);
   await step.getByRole('switch', { name: /Unknown policy/ }).click();
   await step.getByLabel('Assigned Handler').fill('Hannah Handler');
-  await step.getByRole('combobox', { name: /Cause of Loss/ }).click();
-  await page.getByRole('option').first().click();
+// On Azure the cause-of-loss list can still be loading when the dropdown is first opened,
+  // so keep opening it until the options are actually there, then pick one by name.
+  const causeOfLoss = step.getByRole('combobox', { name: /Cause of Loss/ });
+  await expect(async () => {
+    await causeOfLoss.click();
+    await expect(page.getByRole('option', { name: /Collision/ })).toBeVisible({ timeout: 5_000 });
+  }).toPass({ timeout: 60_000 });
+  await page.getByRole('option', { name: /Collision/ }).click();
   await step.getByLabel('Loss Location').fill('E2E Main St & 5th Ave');
   await step.getByLabel('Loss Description').fill('E2E-01: rear-ended at a junction');
   await step.getByRole('button', { name: 'Next' }).click();
