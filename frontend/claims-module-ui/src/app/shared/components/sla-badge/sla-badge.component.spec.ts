@@ -18,7 +18,7 @@ describe('SlaBadgeComponent', () => {
     const badge = await render('2026-09-20T08:30:00Z');
     expect(await badge.getText()).toContain('SLA breached');
     const tooltip = await badge.getTooltipText();
-    expect(tooltip).toContain('SLA breached since');
+    expect(tooltip).toContain('no activity for 48+ hours (detected ');
     expect(tooltip).toContain('Sep 20, 2026');
     expect(await badge.getAriaLabel()).toBe(tooltip);
   });

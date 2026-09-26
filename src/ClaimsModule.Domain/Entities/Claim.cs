@@ -202,7 +202,11 @@ public sealed class Claim : AggregateRoot
     public void RaiseWarning(string code, string message, string raisedBy) =>
         AddDomainEvent(new ClaimWarningRaisedEvent(Id, code, message, raisedBy));
 
-    public void FlagManagerOverrideRequired() => RequiresManagerOverride = true;
+    /// <summary>
+    /// BR-R-07: mirrors whether the approved aggregate reserve is over the $10M cap. Called whenever the approved
+    /// total can move, so the flag clears again once approved reductions bring the claim back under the cap.
+    /// </summary>
+    public void UpdateAggregateCapFlag(bool exceedsCap) => RequiresManagerOverride = exceedsCap;
 
     /// <summary>Idempotent: re-flagging an already-breached claim changes nothing (the SLA job runs every 15 minutes).</summary>
     public bool FlagSlaBreach(DateTimeOffset detectedAt)

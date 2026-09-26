@@ -135,6 +135,34 @@ describe('ClaimDetailComponent', () => {
       expect(fixture.nativeElement.textContent).toContain('GL_POSTING_SIMULATED');
     });
 
+    it('clamps long audit descriptions with a Show more / Show less toggle', async () => {
+      create('Handler');
+      flushLoad(claimDetail());
+      await openTab('Audit Log');
+
+      fixture.componentInstance.loadAuditLog();
+      http.expectOne((r) => r.url === `${API}/claims/claim-1/audit`).flush(
+        emptyPage([
+          { id: 'long', action: 'RESERVE_CHANGED', newValues: 'x'.repeat(200), performedBy: 'system', createdAt: '2026-09-01T10:00:00Z' },
+          { id: 'short', action: 'STATUS_CHANGED', oldValues: 'Draft', newValues: 'Open', performedBy: 'system', createdAt: '2026-09-01T10:00:00Z' }
+        ])
+      );
+      fixture.detectChanges();
+
+      const host = fixture.nativeElement as HTMLElement;
+      const texts = host.querySelectorAll('.audit-description__text');
+      expect(texts[0].classList).toContain('audit-description__text--collapsed');
+      expect(texts[1].classList).not.toContain('audit-description__text--collapsed');
+      expect(host.querySelectorAll('.audit-description__toggle').length).withContext('only the long entry').toBe(1);
+
+      const button = host.querySelector<HTMLButtonElement>('.audit-description__toggle')!;
+      expect(button.textContent!.trim()).toBe('Show more');
+      button.click();
+      fixture.detectChanges();
+      expect(texts[0].classList).not.toContain('audit-description__text--collapsed');
+      expect(button.textContent!.trim()).toBe('Show less');
+    });
+
     it('describes each entry from both sides: old → new, or whichever side it has', () => {
       create('Handler');
       flushLoad(claimDetail());
@@ -189,6 +217,28 @@ describe('ClaimDetailComponent', () => {
 
       expect(await decisionButtons('Indemnity Reserve')).toEqual(['Reject']);
       expect(fixture.nativeElement.textContent).toContain('Awaiting approval by another Manager');
+    });
+
+    it('shows the rejection reason under a rejected change', async () => {
+      create('Handler');
+      const rejected = historyEntry({ id: 'h-rej', amount: 50_000, approvalStatus: ApprovalStatus.Rejected, rejectionReason: 'Estimate does not support this amount' });
+      flushLoad(claimDetail({ reserveComponents: [reserveComponent('res-rej', [rejected])] }));
+      await openTab('Reserves');
+
+      const reason = (fixture.nativeElement as HTMLElement).querySelector('.rejection-reason');
+      expect(reason?.textContent).toContain('Rejection reason: Estimate does not support this amount');
+    });
+
+    it('says "a Manager", not "another Manager", when a Supervisor requested a Manager-tier change', async () => {
+      create('Supervisor');
+      const own = historyEntry({ id: 'h-own', amount: 150_000, requiredTier: ApprovalTier.Manager, requestedBy: 'Supervisor User' });
+      flushLoad(claimDetail({ reserveComponents: [reserveComponent('res-own', [own])] }));
+      await openTab('Reserves');
+
+      const text: string = fixture.nativeElement.textContent;
+      expect(text).toContain('Awaiting approval by a Manager');
+      expect(text).not.toContain('another Manager');
+      expect(await decisionButtons('Indemnity Reserve')).toEqual([]);
     });
 
     it('disables Adjust while the reserve has a change pending approval', async () => {
@@ -326,14 +376,14 @@ describe('ClaimDetailComponent', () => {
       await openTab('Reserves');
     });
 
-    it('labels the amount as the new total, prefilled with the current amount, and requires a reason', async () => {
+    it('labels the amount as the new total, left empty (not prefilled), and requires a reason', async () => {
       await openAdjust('Indemnity Reserve');
 
       expect(await (await field(/^New reserve amount/)).getLabel()).toContain('New reserve amount');
-      expect(await (await input(/^New reserve amount/)).getValue()).toBe('50000');
+      expect(await (await input(/^New reserve amount/)).getValue()).toBe('');
       expect(fixture.nativeElement.textContent).toContain('current total $50,000.00');
       expect(await (await input(/^Reason for change/)).isRequired()).toBeTrue();
-      expect(await (await submitButton()).isDisabled()).withContext('no reason yet, and the amount is unchanged').toBeTrue();
+      expect(await (await submitButton()).isDisabled()).withContext('no amount and no reason yet').toBeTrue();
     });
 
     it('shows inline errors for a missing reason, a non-positive amount and an unchanged amount', async () => {
@@ -346,6 +396,10 @@ describe('ClaimDetailComponent', () => {
 
       const amount = await input(/^New reserve amount/);
       await amount.focus();
+      await amount.blur();
+      expect(await (await field(/^New reserve amount/)).getTextErrors()).toEqual(['Enter an amount.']);
+
+      await amount.setValue('50000');
       await amount.blur();
       expect(await (await field(/^New reserve amount/)).getTextErrors()).toEqual(['The new amount must differ from the current amount.']);
 
@@ -364,7 +418,8 @@ describe('ClaimDetailComponent', () => {
 
     it('previews the authority tier on the NEW amount and PUTs the new total with the reason', async () => {
       await openAdjust('Indemnity Reserve');
-      expect(fixture.nativeElement.textContent).withContext('50,000 is Supervisor tier').toContain('Requires Supervisor approval');
+      await (await input(/^New reserve amount/)).setValue('60000');
+      expect(fixture.nativeElement.textContent).withContext('60,000 is Supervisor tier').toContain('Requires Supervisor approval');
 
       // A 150,000 new total is a +100,000 change, but the tier follows the new total: Manager.
       await (await input(/^New reserve amount/)).setValue('150000');
@@ -385,7 +440,7 @@ describe('ClaimDetailComponent', () => {
     it('requires a negative new total for a RecoveryReserve', async () => {
       await openAdjust('Recovery Reserve');
       const amount = await input(/^New reserve amount/);
-      expect(await amount.getValue()).toBe('-2000');
+      expect(await amount.getValue()).withContext('not prefilled').toBe('');
 
       await amount.setValue('500');
       await amount.blur();
@@ -498,7 +553,8 @@ describe('ClaimDetailComponent', () => {
 
       const table = (fixture.nativeElement as HTMLElement).querySelector('mat-card.reserve-card table')!;
       const headers = Array.from(table.querySelectorAll('thead th')).map((th) => th.textContent!.trim());
-      expect(headers).toEqual(['#', 'Previous → New', 'Change', 'Reason', 'Status', 'GL Posting', 'Changed By', 'Decided By', '']);
+      // No Decision column: this viewer can't act on the pending change.
+      expect(headers).toEqual(['#', 'Previous → New', 'Change', 'Reason', 'Status', 'GL Posting', 'Changed By', 'Decided By']);
 
       const rows = Array.from(table.querySelectorAll('tbody tr')).map((tr) =>
         Array.from(tr.querySelectorAll('td')).map((td) => td.textContent!.replace(/\s+/g, ' ').trim())
@@ -795,7 +851,7 @@ describe('ClaimDetailComponent', () => {
       const chip = await loader.getHarness(SlaBadgeHarness);
       expect(await chip.getText()).toContain('SLA breached');
       const tooltip = await chip.getTooltipText();
-      expect(tooltip).toContain('SLA breached since');
+      expect(tooltip).toContain('no activity for 48+ hours (detected ');
       expect(tooltip).toContain('2026');
     });
 

@@ -50,7 +50,8 @@ public sealed class ApproveReserveCommandHandler(
         // point a large reserve can push the claim over the aggregate cap. Throwing here rolls the
         // approval back with the rest of the unit of work.
         var aggregateTotal = claim.ReserveComponents.Aggregate(Money.Zero(component.CurrentAmount.Currency), (sum, rc) => sum + rc.CurrentAmount);
-        if (authorityEvaluator.ExceedsAggregateCap(aggregateTotal))
+        var exceedsCap = authorityEvaluator.ExceedsAggregateCap(aggregateTotal);
+        if (exceedsCap)
         {
             if (!request.ManagerOverrideConfirmed)
             {
@@ -62,9 +63,10 @@ public sealed class ApproveReserveCommandHandler(
                 throw new ForbiddenAccessException("Only a Manager can override the $10,000,000 aggregate reserve cap.");
             }
 
-            claim.FlagManagerOverrideRequired();
             claim.RaiseWarning("BR-R-07", "Aggregate reserve exceeds $10,000,000; approved under manager override.", currentUser.UserName);
         }
+
+        claim.UpdateAggregateCapFlag(exceedsCap);
 
         await context.SaveChangesAsync(cancellationToken);
 

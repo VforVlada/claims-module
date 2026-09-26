@@ -30,7 +30,8 @@ public sealed class OpenReserveCommandHandler(
 
         var warnings = new List<ValidationIssue>();
         var aggregateTotal = claim.ReserveComponents.Aggregate(Money.Zero(amount.Currency), (sum, rc) => sum + rc.CurrentAmount);
-        if (authorityEvaluator.ExceedsAggregateCap(aggregateTotal))
+        var exceedsCap = authorityEvaluator.ExceedsAggregateCap(aggregateTotal);
+        if (exceedsCap)
         {
             if (!request.ManagerOverrideConfirmed)
             {
@@ -44,9 +45,10 @@ public sealed class OpenReserveCommandHandler(
                 throw new ForbiddenAccessException("Only a Manager can override the $10,000,000 aggregate reserve cap.");
             }
 
-            claim.FlagManagerOverrideRequired();
             warnings.Add(new ValidationIssue("BR-R-07", "Aggregate reserve exceeds $10,000,000 and requires manager override.", nameof(request.Amount)));
         }
+
+        claim.UpdateAggregateCapFlag(exceedsCap);
 
         await context.SaveChangesAsync(cancellationToken);
 

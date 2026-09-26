@@ -205,13 +205,66 @@
   }
 }
 
-// Reserve approve/reject icon buttons — same green/red as the status badge's success/danger.
+// Reserve approve/reject buttons — same green/red as the status badge's success/danger.
+.decision-cell {
+  white-space: nowrap;
+}
+
+
+// Pending-change banner above the history table: amber while waiting, blue when the viewer must act.
+.pending-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding: 12px 16px;
+  border-left: 4px solid #ef6c00;
+  border-radius: 4px;
+  background: #fff3e0;
+  color: #5d4037;
+
+  mat-icon {
+    flex: none;
+    color: #ef6c00;
+  }
+
+  strong {
+    display: block;
+    font-size: 15px;
+    color: #e65100;
+  }
+
+  &--action {
+    border-left-color: #1565c0;
+    background: #e3f2fd;
+    color: #263238;
+
+    mat-icon,
+    strong {
+      color: #1565c0;
+    }
+  }
+}
+
+.pending-banner__detail {
+  font-size: 13px;
+}
+
+.decision-button {
+  margin: 2px 4px 2px 0;
+  white-space: nowrap;
+}
+
 .decision-approve {
-  color: #2e7d32;
+  --mdc-filled-button-container-color: #2e7d32;
+  --mdc-filled-button-label-text-color: #fff;
+  --mat-filled-button-icon-color: #fff;
 }
 
 .decision-reject {
-  color: #c62828;
+  --mdc-outlined-button-outline-color: #c62828;
+  --mdc-outlined-button-label-text-color: #c62828;
+  --mat-outlined-button-icon-color: #c62828;
 }
 
 .adjust-blocked-note {
@@ -220,8 +273,45 @@
   color: rgba(0, 0, 0, 0.6);
 }
 
-.own-request-note {
+
+// Rejection reason under the Rejected badge in the reserve history — same red as the badge.
+.rejection-reason {
+  margin-top: 4px;
+  max-width: 260px;
   font-size: 12px;
-  color: rgba(0, 0, 0, 0.6);
-  margin-right: 4px;
+  color: #c62828;
+  white-space: normal;
+}
+
+// Audit log: long descriptions are clamped to two lines with a Show more / Show less toggle.
+.audit-description {
+  max-width: 480px;
+}
+
+.audit-description__text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+
+  &--collapsed {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+}
+
+.audit-description__toggle {
+  padding: 0;
+  margin-top: 2px;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 12px;
+  color: #1565c0;
+  cursor: pointer;
+
+  &:hover {
+    text-decoration: underline;
+  }
 }

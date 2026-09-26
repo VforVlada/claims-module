@@ -337,6 +337,32 @@ public class ApproveReserveCommandHandlerTests
         Assert.Contains(claim.DomainEvents, e => e is ClaimsModule.Domain.Events.ClaimWarningRaisedEvent { Code: "BR-R-07" });
     }
 
+    /// <summary>A claim approved over the cap (10,100,000, flagged) with a pending Manager-tier decrease to 9,000,000.</summary>
+    internal static (Claim Claim, ClaimReserveComponent Component, Guid PendingHistoryId) SeedFlaggedClaimWithPendingDecrease(TestDbContext context)
+    {
+        var claim = Claim.Create(Guid.NewGuid(), ClaimNumber.Create(2026, 1), null, ClaimType.Auto, "Hannah Handler", DateTimeOffset.UtcNow.AddDays(-1), "desc", "NY", Guid.NewGuid(), "tester");
+        var component = claim.OpenReserve(ReserveComponentType.IndemnityReserve, new Money(10_100_000m), ApprovalTier.Manager, "tester");
+        component.Approve(component.History.Single().Id, "earlier manager", DateTimeOffset.UtcNow);
+        claim.UpdateAggregateCapFlag(true);
+        var decrease = component.SubmitChange(new Money(9_000_000m), ApprovalTier.Manager, "tester", "Reserve reduced after review");
+        context.Claims.Add(claim);
+        context.SaveChanges();
+        return (claim, component, decrease.Id);
+    }
+
+    /// <summary>BR-R-07: approving a decrease that brings the approved total back under the cap clears the flag.</summary>
+    [Fact]
+    public async Task Handle_ApprovingDecreaseBelowAggregateCap_ClearsManagerOverrideFlag()
+    {
+        using var context = TestDbContext.Create();
+        var (claim, component, historyId) = SeedFlaggedClaimWithPendingDecrease(context);
+
+        var dto = await ManagerHandler(context).Handle(new ApproveReserveCommand(claim.Id, component.Id, historyId), CancellationToken.None);
+
+        Assert.Equal(9_000_000m, dto.CurrentAmount);
+        Assert.False(context.Claims.Single(c => c.Id == claim.Id).RequiresManagerOverride);
+    }
+
     [Fact]
     public async Task Handle_ApprovalWouldExceedAggregateCap_OverrideBySupervisor_ThrowsForbiddenAccessException()
     {
@@ -486,6 +512,21 @@ public class RejectReserveCommandHandlerTests
         Assert.Equal(0m, dto.CurrentAmount);
         Assert.Equal(ApprovalStatus.Rejected, dto.History.Single().ApprovalStatus);
         Assert.Equal("Not justified", dto.History.Single().RejectionReason);
+    }
+
+    /// <summary>BR-R-07: a rejected change never joined the approved total, so the cap flag is left as it was.</summary>
+    [Fact]
+    public async Task Handle_RejectingDecreaseOnClaimOverAggregateCap_LeavesManagerOverrideFlagSet()
+    {
+        using var context = TestDbContext.Create();
+        var (claim, component, historyId) = ApproveReserveCommandHandlerTests.SeedFlaggedClaimWithPendingDecrease(context);
+        var manager = new FakeCurrentUserService { Roles = ["Manager"], UserName = "Mia Manager" };
+        var sut = new RejectReserveCommandHandler(context, new ReserveAuthorityEvaluator(), manager, new FakeDateTimeProvider(), TestMapperFactory.Create());
+
+        var dto = await sut.Handle(new RejectReserveCommand(claim.Id, component.Id, historyId, "Keep the reserve as is"), CancellationToken.None);
+
+        Assert.Equal(10_100_000m, dto.CurrentAmount);
+        Assert.True(context.Claims.Single(c => c.Id == claim.Id).RequiresManagerOverride);
     }
 
     [Fact]

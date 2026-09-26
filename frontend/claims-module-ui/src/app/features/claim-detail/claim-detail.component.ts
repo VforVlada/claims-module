@@ -271,7 +271,8 @@ export class ClaimDetailComponent implements OnInit {
     this.reserveForm.reset({
       reserveComponentId: component.id,
       componentType: component.componentType,
-      amount: component.currentAmount,
+      // Left empty so typing doesn't append to a prefilled figure; the summary above shows the current total.
+      amount: null,
       reason: '',
       currency: component.currency
     });
@@ -285,7 +286,23 @@ export class ClaimDetailComponent implements OnInit {
    * adjustment is rejected (422), so Adjust is disabled until that change is approved or rejected.
    */
   hasPendingChange(component: ReserveComponentDto): boolean {
-    return component.history.some((h) => h.approvalStatus === ApprovalStatus.PendingApproval);
+    return !!this.pendingChange(component);
+  }
+
+  /** The change awaiting a decision, if any — at most one per component. */
+  pendingChange(component: ReserveComponentDto): ReserveHistoryDto | undefined {
+    return component.history.find((h) => h.approvalStatus === ApprovalStatus.PendingApproval);
+  }
+
+  /** The Decision column only appears while this component has a pending change the viewer can act on. */
+  showDecisionColumn(component: ReserveComponentDto): boolean {
+    const pending = this.pendingChange(component);
+    return !!pending && this.canDecide(pending);
+  }
+
+  /** Who can decide this change, for the pending banner. */
+  approverLabel(history: ReserveHistoryDto): string {
+    return history.requiredTier === ApprovalTier.Manager ? 'Manager' : 'Supervisor or Manager';
   }
 
   currencyError(): string {
@@ -438,6 +455,26 @@ export class ClaimDetailComponent implements OnInit {
   auditDescription(entry: ClaimAuditLogDto): string {
     if (entry.oldValues && entry.newValues) return `${entry.oldValues} → ${entry.newValues}`;
     return entry.newValues || entry.oldValues || '—';
+  }
+
+  /** Audit entries whose description is clamped to two lines until expanded. */
+  private readonly expandedAuditIds = signal<ReadonlySet<string>>(new Set());
+
+  /** Long enough to be clamped at two lines in the Description column. */
+  isAuditLong(entry: ClaimAuditLogDto): boolean {
+    return this.auditDescription(entry).length > 120;
+  }
+
+  isAuditExpanded(entry: ClaimAuditLogDto): boolean {
+    return this.expandedAuditIds().has(entry.id);
+  }
+
+  toggleAuditExpanded(entry: ClaimAuditLogDto): void {
+    this.expandedAuditIds.update((ids) => {
+      const next = new Set(ids);
+      if (!next.delete(entry.id)) next.add(entry.id);
+      return next;
+    });
   }
 
   isOwnRequest(history: ReserveHistoryDto): boolean {

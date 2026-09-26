@@ -18,9 +18,9 @@
           <app-sla-badge [breachedAt]="c.slaBreachedAt"></app-sla-badge>
         }
         @if (c.requiresManagerOverride) {
-          <span class="manager-override-flag" title="Aggregate reserves exceed $10M and require manager override">
+          <span class="manager-override-flag" title="Approved reserves on this claim total more than $10,000,000; changes above the cap need a Manager override">
             <mat-icon>flag</mat-icon>
-            Manager override required
+            Over $10M aggregate cap (manager override)
           </span>
         }
       </div>
@@ -164,7 +164,7 @@
                 }
                 <form [formGroup]="reserveForm" class="inline-form">
                   @if (reservePanelMode() === 'open') {
-                    <mat-form-field appearance="outline">
+                    <mat-form-field appearance="outline" subscriptSizing="dynamic">
                       <mat-label>Component Type</mat-label>
                       <mat-select formControlName="componentType">
                         @for (type of reserveComponentTypes; track type) {
@@ -173,7 +173,7 @@
                       </mat-select>
                     </mat-form-field>
                   }
-                  <mat-form-field appearance="outline">
+                  <mat-form-field appearance="outline" subscriptSizing="dynamic">
                     <mat-label>{{ amountLabel }}</mat-label>
                     <input matInput type="number" formControlName="amount" />
                     @if (reserveForm.get('componentType')!.value === recoveryReserve) {
@@ -181,12 +181,12 @@
                     }
                     <mat-error>{{ amountError() }}</mat-error>
                   </mat-form-field>
-                  <mat-form-field appearance="outline">
+                  <mat-form-field appearance="outline" subscriptSizing="dynamic">
                     <mat-label>Currency</mat-label>
                     <input matInput appCurrencyInput formControlName="currency" />
                     <mat-error>{{ currencyError() }}</mat-error>
                   </mat-form-field>
-                  <mat-form-field appearance="outline" class="reason-field">
+                  <mat-form-field appearance="outline" class="reason-field" subscriptSizing="dynamic">
                     <mat-label>{{ reservePanelMode() === 'adjust' ? 'Reason for change' : 'Reason (optional)' }}</mat-label>
                     <textarea matInput #reasonInput formControlName="reason" rows="2" [maxlength]="limits.reason" [required]="reservePanelMode() === 'adjust'"></textarea>
                     <mat-hint align="end">{{ reasonInput.value.length }} / {{ limits.reason }}</mat-hint>
@@ -223,10 +223,37 @@
                     </mat-card-subtitle>
                   </mat-card-header>
                   <mat-card-content>
+                    @if (pendingChange(component); as pending) {
+                      <div class="pending-banner" [class.pending-banner--action]="canDecide(pending) && !isOwnRequest(pending)" role="status">
+                        <mat-icon>{{ canDecide(pending) && !isOwnRequest(pending) ? 'gavel' : 'hourglass_top' }}</mat-icon>
+                        <div>
+                          <strong>
+                            @if (isOwnRequest(pending) && canDecide(pending)) {
+                              <!-- "another" only when the viewer's own role could approve it, e.g. a Manager's own Manager-tier change -->
+                              Awaiting approval by another {{ approverLabel(pending) }}
+                            } @else if (canDecide(pending)) {
+                              Your decision is needed
+                            } @else {
+                              Awaiting approval by a {{ approverLabel(pending) }}
+                            }
+                          </strong>
+                          <span class="pending-banner__detail">
+                            Change #{{ pending.changeSequence }}: {{ pending.previousAmount | currency: pending.currency }} → {{ pending.newAmount | currency: pending.currency }}
+                            ({{ signedChange(pending) }}), requested by {{ pending.requestedBy }}.
+                            @if (canDecide(pending) && !isOwnRequest(pending)) {
+                              Approve or reject it in the table below.
+                            }
+                          </span>
+                        </div>
+                      </div>
+                    }
                     <div class="table-scroll">
                       <table class="plain-table">
                         <thead>
                           <tr>
+                            @if (showDecisionColumn(component)) {
+                              <th>Decision</th>
+                            }
                             <th>#</th>
                             <th>Previous → New</th>
                             <th>Change</th>
@@ -235,12 +262,29 @@
                             <th>GL Posting</th>
                             <th>Changed By</th>
                             <th>Decided By</th>
-                            <th></th>
                           </tr>
                         </thead>
                         <tbody>
                           @for (history of historyNewestFirst(component); track history.id) {
                             <tr>
+                              @if (showDecisionColumn(component)) {
+                                <td class="decision-cell">
+                                  @if (canDecide(history)) {
+                                    @if (!isOwnRequest(history)) {
+                                      <button mat-flat-button class="decision-button decision-approve" (click)="approveReserve(component, history)"
+                                              [title]="'Approve this reserve change (' + signedChange(history) + ') and post it to the GL'" aria-label="Approve">
+                                        <mat-icon>check_circle</mat-icon>
+                                        Approve
+                                      </button>
+                                    }
+                                    <button mat-stroked-button class="decision-button decision-reject" (click)="rejectReserve(component, history)"
+                                            [title]="'Reject this reserve change (' + signedChange(history) + ') — a reason is required'" aria-label="Reject">
+                                      <mat-icon>cancel</mat-icon>
+                                      Reject
+                                    </button>
+                                  }
+                                </td>
+                              }
                               <td>{{ history.changeSequence }}</td>
                               <td class="history-amounts">
                                 <span class="history-previous">{{ history.previousAmount | currency: history.currency }}</span>
@@ -251,26 +295,15 @@
                               <td class="history-reason">{{ history.changeReason || '—' }}</td>
                               <td>
                                 <app-status-badge [label]="approvalBadge(history.approvalStatus).label" [color]="approvalBadge(history.approvalStatus).color"></app-status-badge>
+                                @if (history.approvalStatus === ApprovalStatus.Rejected && history.rejectionReason) {
+                                  <div class="rejection-reason"><strong>Rejection reason:</strong> {{ history.rejectionReason }}</div>
+                                }
                               </td>
                               <td>
                                 <app-status-badge [label]="postingBadge(history.postingStatus).label" [color]="postingBadge(history.postingStatus).color"></app-status-badge>
                               </td>
                               <td>{{ history.requestedBy }}</td>
                               <td>{{ history.decidedBy || '—' }}</td>
-                              <td>
-                                @if (canDecide(history)) {
-                                  @if (isOwnRequest(history)) {
-                                    <span class="own-request-note">Awaiting approval by another {{ history.requiredTier === ApprovalTier.Manager ? 'Manager' : 'Supervisor or Manager' }}</span>
-                                  } @else {
-                                    <button mat-icon-button class="decision-approve" (click)="approveReserve(component, history)" title="Approve" aria-label="Approve">
-                                      <mat-icon>check_circle</mat-icon>
-                                    </button>
-                                  }
-                                  <button mat-icon-button class="decision-reject" (click)="rejectReserve(component, history)" title="Reject" aria-label="Reject">
-                                    <mat-icon>cancel</mat-icon>
-                                  </button>
-                                }
-                              </td>
                             </tr>
                           }
                         </tbody>
@@ -374,7 +407,14 @@
                   @for (entry of auditEntries(); track entry.id) {
                     <tr>
                       <td>{{ entry.action }}</td>
-                      <td>{{ auditDescription(entry) }}</td>
+                      <td class="audit-description">
+                        <div class="audit-description__text" [class.audit-description__text--collapsed]="isAuditLong(entry) && !isAuditExpanded(entry)">{{ auditDescription(entry) }}</div>
+                        @if (isAuditLong(entry)) {
+                          <button type="button" class="audit-description__toggle" (click)="toggleAuditExpanded(entry)">
+                            {{ isAuditExpanded(entry) ? 'Show less' : 'Show more' }}
+                          </button>
+                        }
+                      </td>
                       <td>{{ entry.performedBy }}</td>
                       <td>{{ entry.createdAt | date: 'medium' }}</td>
                     </tr>

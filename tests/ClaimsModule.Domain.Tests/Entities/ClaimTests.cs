@@ -140,13 +140,15 @@ public class ClaimTests
     }
 
     [Fact]
-    public void FlagManagerOverrideRequired_SetsFlagTrue()
+    public void UpdateAggregateCapFlag_SetsAndClearsFlag()
     {
         var claim = CreateClaim();
 
-        claim.FlagManagerOverrideRequired();
-
+        claim.UpdateAggregateCapFlag(true);
         Assert.True(claim.RequiresManagerOverride);
+
+        claim.UpdateAggregateCapFlag(false);
+        Assert.False(claim.RequiresManagerOverride);
     }
 
     /// <summary>BR-C-06 as a domain invariant: Draft → Closed is refused even if the workflow table were to allow it.</summary>

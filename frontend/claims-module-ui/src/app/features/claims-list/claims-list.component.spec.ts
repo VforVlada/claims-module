@@ -91,7 +91,7 @@ describe('ClaimsListComponent', () => {
     expect(await plainStatus.getAllHarnesses(SlaBadgeHarness)).toEqual([]);
     const [chip] = await flaggedStatus.getAllHarnesses(SlaBadgeHarness);
     expect(await chip.getText()).toContain('SLA breached');
-    expect(await chip.getTooltipText()).toContain('SLA breached since');
+    expect(await chip.getTooltipText()).toContain('no activity for 48+ hours (detected ');
     expect(await (await flaggedStatus.getHarness(StatusBadgeHarness)).getLabel()).toBe('Open');
   });
 
