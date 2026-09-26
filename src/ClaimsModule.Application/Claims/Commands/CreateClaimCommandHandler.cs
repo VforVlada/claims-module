@@ -61,9 +61,10 @@ public sealed class CreateClaimCommandHandler(
             claim.OpenReserve(request.InitialReserve.ComponentType, amount, tier, currentUser.UserName);
 
             var aggregateTotal = claim.ReserveComponents.Aggregate(Money.Zero(amount.Currency), (sum, rc) => sum + rc.CurrentAmount);
-            if (authorityEvaluator.ExceedsAggregateCap(aggregateTotal))
+            var exceedsCap = authorityEvaluator.ExceedsAggregateCap(aggregateTotal);
+            claim.UpdateAggregateCapFlag(exceedsCap);
+            if (exceedsCap)
             {
-                claim.FlagManagerOverrideRequired();
                 warnings.Add(new ValidationIssue("BR-R-07", "Aggregate reserve exceeds $10,000,000 and requires manager override.", "InitialReserve"));
             }
         }

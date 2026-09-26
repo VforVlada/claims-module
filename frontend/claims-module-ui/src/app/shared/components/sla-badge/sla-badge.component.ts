@@ -5,7 +5,8 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 
 /**
  * "SLA breached" chip shown next to a claim's status badge when the SLA job has flagged the claim
- * (Draft/Open and untouched for 48h+). Warn/red tone; the tooltip says when the breach was recorded.
+ * (Draft/Open and untouched for 48h+). Warn/red tone; the tooltip gives when the job detected the breach
+ * (up to 15 minutes after the 48h mark, or later if the API was down), not when inactivity began.
  */
 @Component({
   selector: 'app-sla-badge',
@@ -52,6 +53,6 @@ export class SlaBadgeComponent {
 
   get tooltip(): string {
     const when = this.breachedAt ? this.datePipe.transform(this.breachedAt, 'medium') : null;
-    return when ? `SLA breached since ${when} — no activity for 48+ hours` : 'SLA breached — no activity for 48+ hours';
+    return when ? `SLA breached — no activity for 48+ hours (detected ${when})` : 'SLA breached — no activity for 48+ hours';
   }
 }

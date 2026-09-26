@@ -89,7 +89,7 @@ test.describe('reserve approval authority', () => {
     const handlerCard = reserveCard(handler.page, 'Indemnity Reserve');
     await handlerCard.getByRole('button', { name: /Adjust/ }).click();
     const newAmount = handler.page.getByLabel('New reserve amount');
-    await expect(newAmount, 'prefilled with the current amount').toHaveValue('0');
+    await expect(newAmount, 'left empty, not prefilled with the current amount').toHaveValue('');
     const submit = handler.page.getByRole('button', { name: 'Submit', exact: true });
     await newAmount.fill('40000');
     await expect(handler.page.getByText('Requires Supervisor approval')).toBeVisible();
